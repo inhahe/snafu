@@ -1,0 +1,83 @@
+# Persistent todo list application
+# Features: to_json/from_json, pattern matching, string methods, file I/O
+
+todos = []
+next_id = 1
+
+df show_todos() {
+  if len(todos) == 0 {
+    p("  (no todos)")
+    r und
+  }
+  for t in todos {
+    mark = if t.get("done", false) { "[x]" } el { "[ ]" }
+    p("  ${mark} #${t.get('id', '?')} ${t.get('text', '')}")
+  }
+}
+
+df add_todo(text) {
+  id = next_id
+  next_id = next_id + 1
+  todos = todos + [["id": id, "text": text, "done": false]]
+  p("  added #${id}: ${text}")
+}
+
+df mark_done(n) {
+  found = false
+  todos = todos.map(f(t) -> {
+    if t.get("id", -1) == n {
+      found = true
+      t.set("done", true)
+    } el { t }
+  })
+  if found { p("  done #${n}") } el { p("  not found: #${n}") }
+}
+
+df remove_todo(n) {
+  before = len(todos)
+  todos = todos.filter(f(t) -> t.get("id", -1) <> n)
+  if len(todos) < before { p("  removed #${n}") } el { p("  not found: #${n}") }
+}
+
+df save_todos(path) {
+  data = to_json(["todos": todos, "next_id": next_id], 2)
+  write(path, data)
+  p("  saved ${len(todos)} todos to ${path}")
+}
+
+df load_todos(path) {
+  ty {
+    raw = read(path)
+    data = from_json(raw)
+    todos = data.get("todos", [])
+    next_id = data.get("next_id", 1)
+    p("  loaded ${len(todos)} todos from ${path}")
+  } ex e {
+    p("  error loading: ${e.msg}")
+  }
+}
+
+p("Todo App -- commands: add TEXT, done N, rm N, list, save FILE, load FILE, quit")
+
+lp {
+  line = inp("todo> ")
+  cmd = line.trim()
+  if cmd == "" { cn }
+
+  mt true {
+    _ if cmd == "quit" -> { p("bye"); br }
+    _ if cmd == "list" -> show_todos()
+    _ if cmd.sw("add ") -> add_todo(cmd[4:])
+    _ if cmd.sw("done ") -> {
+      ty { mark_done(int(cmd[5:].trim())) }
+      ex e { p("  usage: done N") }
+    }
+    _ if cmd.sw("rm ") -> {
+      ty { remove_todo(int(cmd[3:].trim())) }
+      ex e { p("  usage: rm N") }
+    }
+    _ if cmd.sw("save ") -> save_todos(cmd[5:].trim())
+    _ if cmd.sw("load ") -> load_todos(cmd[5:].trim())
+    _ -> p("  unknown command: ${cmd}")
+  }
+}

@@ -1,0 +1,85 @@
+# Multi-actor chat simulation
+# Features: actors, atoms (mutable state), pattern matching, string interpolation
+
+# Each actor has a name and an atom-backed message log
+df make_chat_actor(name) {
+  log_atom = atom([])
+
+  handler = f(msg) -> {
+    mt msg {
+      ["ping", sender] -> {
+        log_atom.swap(f(l) -> l + ["got ping from ${sender}"])
+        ["pong", name]
+      }
+      ["pong", sender] -> {
+        log_atom.swap(f(l) -> l + ["got pong from ${sender}"])
+        "ack"
+      }
+      ["say", text, sender] -> {
+        log_atom.swap(f(l) -> l + ["${sender}: ${text}"])
+        "heard"
+      }
+      ["get_log"] -> log_atom.get()
+      ["quit"] -> {
+        log_atom.swap(f(l) -> l + ["shutting down"])
+        "bye"
+      }
+      _ -> "unknown message"
+    }
+  }
+
+  act = actor(handler)
+  act.name = name
+  act
+}
+
+# Create 3 chat actors
+alice = make_chat_actor("Alice")
+bob = make_chat_actor("Bob")
+charlie = make_chat_actor("Charlie")
+
+p("=== Actor Chat Simulation ===")
+p("Created actors: Alice, Bob, Charlie\n")
+
+# Alice pings Bob
+p("Alice pings Bob...")
+reply = bob.send(["ping", "Alice"])
+p("  Bob replied: ${reply}")
+
+# Bob pongs Alice
+p("Bob pongs Alice...")
+reply = alice.send(reply)
+p("  Alice replied: ${reply}")
+
+# Charlie broadcasts a message to everyone
+p("\nCharlie broadcasts 'Hello everyone!'")
+for act in [alice, bob] {
+  reply = act.send(["say", "Hello everyone!", "Charlie"])
+  p("  ${act.name} replied: ${reply}")
+}
+
+# Alice sends a direct message to Charlie
+p("\nAlice sends DM to Charlie...")
+charlie.send(["say", "Want to grab lunch?", "Alice"])
+
+# Bob replies to Charlie too
+p("Bob sends DM to Charlie...")
+charlie.send(["say", "Count me in!", "Bob"])
+
+# Get and display all logs
+p("\n=== Message Logs ===")
+for act in [alice, bob, charlie] {
+  entries = act.send(["get_log"])
+  p("${act.name}:")
+  for entry in entries {
+    p("  - ${entry}")
+  }
+}
+
+# Shut everyone down
+for act in [alice, bob, charlie] {
+  act.send(["quit"])
+  act.stop()
+}
+
+p("\nAll actors stopped.")

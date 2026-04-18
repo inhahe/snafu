@@ -1,0 +1,40 @@
+# Binary tree operations using sum types
+
+sm Tree = Leaf | Node(l, v, r)
+
+df insert(t, x) {
+  mt t {
+    Leaf -> Node(Leaf, x, Leaf)
+    Node(l, v, r) ->
+      if x < v {
+        Node(insert(l, x), v, r)
+      } eli x > v {
+        Node(l, v, insert(r, x))
+      } el {
+        t
+      }
+  }
+}
+
+df inorder(t) {
+  mt t {
+    Leaf -> []
+    Node(l, v, r) -> inorder(l) + [v] + inorder(r)
+  }
+}
+
+df depth(t) {
+  mt t {
+    Leaf -> 0
+    Node(l, v, r) -> 1 + max([depth(l), depth(r)])
+  }
+}
+
+# Build a tree
+t = Leaf
+for x in [5, 3, 8, 1, 4, 7, 9, 2, 6] {
+  t = insert(t, x)
+}
+
+p("In-order:", inorder(t))
+p("Depth:", depth(t))

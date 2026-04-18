@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Packages &amp; Modules - Snafu</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav>
+  <a class="logo" href="index.html">Snafu</a>
+  <div class="links">
+    <a href="index.html">Home</a>
+    <a href="tour.html">Language Tour</a>
+    <a href="reference.html">Reference</a>
+    <a href="packages.html" class="active">Packages</a>
+  </div>
+</nav>
+
+<main>
+  <h1>Packages &amp; Modules</h1>
+  <p>
+    Snafu's module system lets you organize code into reusable <code>.snf</code> files,
+    control what names are visible externally, and seamlessly bridge to Python's ecosystem.
+  </p>
+
+  <!-- ===== Module Basics ===== -->
+  <h2>Module = File</h2>
+  <p>
+    Each <code>.snf</code> file is a module. All names defined at the top level of the file
+    become module-level bindings. By default, all top-level names (except those starting
+    with <code>__</code>) are exported.
+  </p>
+
+  <div class="example">
+    <div class="example-header">greetings.snf</div>
+    <pre><code><span class="cmt"># A simple module with two functions</span>
+
+<span class="kw">df</span> <span class="fn">hello</span>(name) <span class="op">=</span> <span class="str">"Hello, "</span> <span class="op">+</span> name <span class="op">+</span> <span class="str">"!"</span>
+<span class="kw">df</span> <span class="fn">goodbye</span>(name) <span class="op">=</span> <span class="str">"Goodbye, "</span> <span class="op">+</span> name <span class="op">+</span> <span class="str">"."</span></code></pre>
+  </div>
+
+  <!-- ===== Importing with us ===== -->
+  <h2>Importing with <code>us</code></h2>
+  <p>
+    The <code>us</code> (use) keyword imports a module. It loads the <code>.snf</code> file
+    from the current working directory, executes it in a fresh interpreter, caches the result,
+    and makes the exported names available.
+  </p>
+
+  <h3>Qualified import</h3>
+  <div class="example">
+    <div class="example-header">Qualified: access via module.name</div>
+    <pre><code><span class="kw">us</span> greetings
+
+<span class="fn">p</span>(greetings.<span class="fn">hello</span>(<span class="str">"Alice"</span>))       <span class="cmt"># Hello, Alice!</span>
+<span class="fn">p</span>(greetings.<span class="fn">goodbye</span>(<span class="str">"Bob"</span>))       <span class="cmt"># Goodbye, Bob.</span></code></pre>
+    <div class="output">Hello, Alice!<br>Goodbye, Bob.</div>
+  </div>
+
+  <h3>Wildcard import</h3>
+  <div class="example">
+    <div class="example-header">Wildcard: dump all names into scope</div>
+    <pre><code><span class="kw">us</span> <span class="op">*</span>greetings
+
+<span class="fn">p</span>(<span class="fn">hello</span>(<span class="str">"Alice"</span>))                <span class="cmt"># Hello, Alice!</span></code></pre>
+    <div class="output">Hello, Alice!</div>
+  </div>
+
+  <h3>Aliased import</h3>
+  <div class="example">
+    <div class="example-header">Alias: rename the module namespace</div>
+    <pre><code><span class="kw">us</span> greetings <span class="kw">as</span> gr
+
+<span class="fn">p</span>(gr.<span class="fn">hello</span>(<span class="str">"Alice"</span>))              <span class="cmt"># Hello, Alice!</span></code></pre>
+    <div class="output">Hello, Alice!</div>
+  </div>
+
+  <p>
+    <strong>Caching:</strong> Modules are loaded once. Subsequent <code>us</code> of the same module
+    returns the cached scope. The child interpreter inherits the parent's strict-mode setting.
+  </p>
+
+  <!-- ===== Exports ===== -->
+  <h2>Controlling Exports with <code>xp</code></h2>
+  <p>
+    By default, all top-level names are exported. Use <code>xp</code> (export) to restrict
+    which names are visible to importers.
+  </p>
+
+  <div class="example">
+    <div class="example-header">math_helpers.snf -- only add and mul are exported</div>
+    <pre><code><span class="kw">xp</span> [add, mul]
+
+<span class="kw">df</span> <span class="fn">add</span>(a, b) <span class="op">=</span> a <span class="op">+</span> b
+<span class="kw">df</span> <span class="fn">mul</span>(a, b) <span class="op">=</span> a <span class="op">*</span> b
+<span class="kw">df</span> <span class="fn">__internal_helper</span>(x) <span class="op">=</span> x <span class="op">*</span> x   <span class="cmt"># not exported (not in xp list)</span></code></pre>
+  </div>
+
+  <div class="example">
+    <div class="example-header">Using the module</div>
+    <pre><code><span class="kw">us</span> math_helpers
+
+<span class="fn">p</span>(math_helpers.<span class="fn">add</span>(<span class="num">3</span>, <span class="num">4</span>))        <span class="cmt"># 7</span>
+<span class="fn">p</span>(math_helpers.<span class="fn">mul</span>(<span class="num">3</span>, <span class="num">4</span>))        <span class="cmt"># 12</span>
+<span class="cmt"># math_helpers.__internal_helper  -- not accessible</span></code></pre>
+    <div class="output">7<br>12</div>
+  </div>
+
+  <p>
+    <strong>How it works:</strong> <code>xp</code> stores the names list as <code>__exports__</code>
+    in the module's scope. When another module imports via <code>us</code>, the importer checks
+    for <code>__exports__</code> and only exposes those names.
+  </p>
+
+  <!-- ===== Python Interop ===== -->
+  <h2>Python Interop with <code>py.import()</code></h2>
+  <p>
+    Snafu can directly import and use any Python module via <code>py.import(name)</code>.
+    This calls Python's <code>importlib.import_module</code> under the hood.
+  </p>
+
+  <div class="example">
+    <div class="example-header">Importing Python modules explicitly</div>
+    <pre><code>math <span class="op">=</span> py.<span class="fn">import</span>(<span class="str">"math"</span>)
+<span class="fn">p</span>(math.<span class="fn">sqrt</span>(<span class="num">16</span>))                   <span class="cmt"># 4.0</span>
+<span class="fn">p</span>(math.pi)                         <span class="cmt"># 3.141592653589793</span>
+
+json <span class="op">=</span> py.<span class="fn">import</span>(<span class="str">"json"</span>)
+<span class="fn">p</span>(json.<span class="fn">dumps</span>([<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>]))          <span class="cmt"># [1, 2, 3]</span></code></pre>
+    <div class="output">4.0<br>3.141592653589793<br>[1, 2, 3]</div>
+  </div>
+
+  <p>
+    <strong>Value interop:</strong> Primitives, lists, dicts, and tuples round-trip by conversion.
+    Python callables are wrapped with automatic argument/return conversion.
+    NumPy arrays and pandas DataFrames are opaque handles with method access.
+  </p>
+
+  <p><strong>Limits:</strong></p>
+  <ul>
+    <li>Symbolic numbers must be flattened with <code>.fl()</code> before entering NumPy.</li>
+    <li>Algebraic effects do not cross into Python and back.</li>
+    <li>Python metaclasses are not respected by Snafu dispatch.</li>
+  </ul>
+
+  <!-- ===== Python Alias Table ===== -->
+  <h2>Python Alias Table (21 Aliases)</h2>
+  <p>
+    Two-character aliases auto-import Python modules on first use.
+    No <code>us</code> or <code>py.import</code> call needed -- just use the alias directly.
+  </p>
+
+  <table>
+    <tr><th>Alias</th><th>Python Module</th><th>Category</th></tr>
+    <tr><td><code>ma</code></td><td>math</td><td>Math</td></tr>
+    <tr><td><code>rn</code></td><td>random</td><td>Math</td></tr>
+    <tr><td><code>js</code></td><td>json</td><td>Data</td></tr>
+    <tr><td><code>cs</code></td><td>csv</td><td>Data</td></tr>
+    <tr><td><code>pk</code></td><td>pickle</td><td>Data</td></tr>
+    <tr><td><code>os</code></td><td>os</td><td>System</td></tr>
+    <tr><td><code>sy</code></td><td>sys</td><td>System</td></tr>
+    <tr><td><code>fs</code></td><td>pathlib</td><td>System</td></tr>
+    <tr><td><code>cp</code></td><td>subprocess</td><td>System</td></tr>
+    <tr><td><code>dt</code></td><td>datetime</td><td>Time</td></tr>
+    <tr><td><code>rq</code></td><td>requests</td><td>Network</td></tr>
+    <tr><td><code>sq</code></td><td>sqlite3</td><td>Database</td></tr>
+    <tr><td><code>n8</code></td><td>numpy</td><td>Science</td></tr>
+    <tr><td><code>pd</code></td><td>pandas</td><td>Science</td></tr>
+    <tr><td><code>pl</code></td><td>matplotlib.pyplot</td><td>Science</td></tr>
+    <tr><td><code>it</code></td><td>itertools</td><td>Functional</td></tr>
+    <tr><td><code>ft</code></td><td>functools</td><td>Functional</td></tr>
+    <tr><td><code>ic</code></td><td>collections</td><td>Functional</td></tr>
+    <tr><td><code>th</code></td><td>threading</td><td>Concurrency</td></tr>
+    <tr><td><code>ap</code></td><td>asyncio</td><td>Concurrency</td></tr>
+    <tr><td><code>hs</code></td><td>hashlib</td><td>Crypto</td></tr>
+  </table>
+
+  <div class="example">
+    <div class="example-header">Using aliases (no import needed)</div>
+    <pre><code><span class="fn">ma</span>.sqrt(<span class="num">16</span>)                        <span class="cmt"># 4.0</span>
+<span class="fn">js</span>.dumps([<span class="str">"hello"</span>, <span class="num">42</span>])            <span class="cmt"># '["hello", 42]'</span>
+<span class="fn">rn</span>.randint(<span class="num">1</span>, <span class="num">100</span>)                <span class="cmt"># random integer</span>
+<span class="fn">os</span>.getcwd()                        <span class="cmt"># current directory</span>
+<span class="fn">dt</span>.datetime.now()                  <span class="cmt"># current date/time</span>
+<span class="fn">fs</span>.Path(<span class="str">"."</span>)                       <span class="cmt"># pathlib Path object</span>
+<span class="fn">hs</span>.md5(<span class="str">b"hello"</span>).hexdigest()       <span class="cmt"># MD5 hash</span></code></pre>
+  </div>
+
+  <p>
+    User-extensible aliases can be defined in <code>~/.snafu/aliases.snf</code>:
+  </p>
+  <div class="example">
+    <div class="example-header">~/.snafu/aliases.snf</div>
+    <pre><code>cv <span class="op">=</span> cv2
+pq <span class="op">=</span> some.obscure.package</code></pre>
+  </div>
+
+  <!-- ===== Name Resolution ===== -->
+  <h2>Name Resolution Order</h2>
+  <p>When Snafu encounters a name, it searches in this order:</p>
+  <ol>
+    <li>Local scope</li>
+    <li>Enclosing lexical scopes</li>
+    <li>Module-level scope</li>
+    <li>Active <code>us</code> blocks (last wins on collision)</li>
+    <li>Snafu built-ins (prelude)</li>
+    <li>Python alias table (triggers import if not yet loaded)</li>
+    <li><code>und</code> (or <code>NameErr</code> in strict mode)</li>
+  </ol>
+
+  <!-- ===== Creating a Module ===== -->
+  <h2>Creating a Reusable Module</h2>
+  <p>
+    Here is a complete walkthrough of creating and using a math utilities module.
+  </p>
+
+  <h3>Step 1: Create the module file</h3>
+  <div class="example">
+    <div class="example-header">lib/math_utils.snf</div>
+    <pre><code><span class="cmt"># Math utilities module</span>
+<span class="kw">xp</span> [clamp, lerp, smoothstep, deg2rad, rad2deg, dist, normalize]
+
+<span class="kw">df</span> <span class="fn">clamp</span>(x, lo, hi) <span class="op">=</span> <span class="fn">min</span>([<span class="fn">max</span>([x, lo]), hi])
+<span class="kw">df</span> <span class="fn">lerp</span>(a, b, t) <span class="op">=</span> a <span class="op">+</span> (b <span class="op">-</span> a) <span class="op">*</span> t
+<span class="kw">df</span> <span class="fn">smoothstep</span>(edge0, edge1, x) {
+    t <span class="op">=</span> <span class="fn">clamp</span>((x <span class="op">-</span> edge0) <span class="op">/</span> (edge1 <span class="op">-</span> edge0), <span class="num">0</span>, <span class="num">1</span>)
+    t <span class="op">*</span> t <span class="op">*</span> (<span class="num">3</span> <span class="op">-</span> <span class="num">2</span> <span class="op">*</span> t)
+}
+<span class="kw">df</span> <span class="fn">deg2rad</span>(d) <span class="op">=</span> d <span class="op">*</span> pi <span class="op">/</span> <span class="num">180</span>
+<span class="kw">df</span> <span class="fn">rad2deg</span>(r) <span class="op">=</span> r <span class="op">*</span> <span class="num">180</span> <span class="op">/</span> pi
+<span class="kw">df</span> <span class="fn">dist</span>(x1, y1, x2, y2) <span class="op">=</span> <span class="fn">sqrt</span>((x2<span class="op">-</span>x1)<span class="op">**</span><span class="num">2</span> <span class="op">+</span> (y2<span class="op">-</span>y1)<span class="op">**</span><span class="num">2</span>)
+<span class="kw">df</span> <span class="fn">normalize</span>(lst) {
+    total <span class="op">=</span> <span class="fn">sum</span>(lst)
+    <span class="kw">if</span> total <span class="op">==</span> <span class="num">0</span> { lst }
+    <span class="kw">el</span> { <span class="fn">m</span>(lst, <span class="str">`</span>a <span class="op">/</span> total<span class="str">`</span>) }
+}</code></pre>
+  </div>
+
+  <h3>Step 2: Use it from another file</h3>
+  <div class="example">
+    <div class="example-header">my_program.snf</div>
+    <pre><code><span class="kw">us</span> math_utils
+
+<span class="cmt"># Clamp a value to a range</span>
+<span class="fn">p</span>(math_utils.<span class="fn">clamp</span>(<span class="num">15</span>, <span class="num">0</span>, <span class="num">10</span>))    <span class="cmt"># 10</span>
+
+<span class="cmt"># Linear interpolation</span>
+<span class="fn">p</span>(math_utils.<span class="fn">lerp</span>(<span class="num">0</span>, <span class="num">100</span>, <span class="num">0.5</span>))  <span class="cmt"># 50</span>
+
+<span class="cmt"># Distance between two points</span>
+<span class="fn">p</span>(math_utils.<span class="fn">dist</span>(<span class="num">0</span>, <span class="num">0</span>, <span class="num">3</span>, <span class="num">4</span>))   <span class="cmt"># 5.0</span>
+
+<span class="cmt"># Convert degrees to radians</span>
+<span class="fn">p</span>(math_utils.<span class="fn">deg2rad</span>(<span class="num">180</span>))       <span class="cmt"># 3.14159...</span>
+
+<span class="cmt"># Normalize a probability distribution</span>
+<span class="fn">p</span>(math_utils.<span class="fn">normalize</span>([<span class="num">2</span>, <span class="num">3</span>, <span class="num">5</span>]))  <span class="cmt"># [0.2, 0.3, 0.5]</span></code></pre>
+    <div class="output">10<br>50<br>5.0<br>3.14159...<br>[0.2, 0.3, 0.5]</div>
+  </div>
+
+  <h3>Step 3: Wildcard import for brevity</h3>
+  <div class="example">
+    <div class="example-header">Shorter usage with us *</div>
+    <pre><code><span class="kw">us</span> <span class="op">*</span>math_utils
+
+<span class="cmt"># Now use functions without prefix</span>
+<span class="fn">p</span>(<span class="fn">lerp</span>(<span class="num">0</span>, <span class="num">100</span>, <span class="num">0.75</span>))             <span class="cmt"># 75</span>
+<span class="fn">p</span>(<span class="fn">dist</span>(<span class="num">1</span>, <span class="num">1</span>, <span class="num">4</span>, <span class="num">5</span>))               <span class="cmt"># 5.0</span></code></pre>
+    <div class="output">75<br>5.0</div>
+  </div>
+
+  <!-- ===== String Utils Example ===== -->
+  <h2>Example: String Utilities Module</h2>
+
+  <div class="example">
+    <div class="example-header">lib/string_utils.snf</div>
+    <pre><code><span class="kw">xp</span> [capitalize, title_case, pad_center, truncate, slug]
+
+<span class="kw">df</span> <span class="fn">capitalize</span>(s) <span class="op">=</span> s[<span class="num">0</span>].upr() <span class="op">+</span> s[<span class="num">1</span>:]
+<span class="kw">df</span> <span class="fn">title_case</span>(s) <span class="op">=</span> <span class="fn">J</span>(<span class="str">" "</span>, <span class="fn">m</span>(<span class="fn">S</span>(s, <span class="str">" "</span>), <span class="str">`</span><span class="fn">capitalize</span>(a)<span class="str">`</span>))
+<span class="kw">df</span> <span class="fn">pad_center</span>(s, width, ch<span class="op">=</span><span class="str">" "</span>) <span class="op">=</span> s.cpad(width, ch)
+<span class="kw">df</span> <span class="fn">truncate</span>(s, n, suffix<span class="op">=</span><span class="str">"..."</span>) <span class="op">=</span> <span class="kw">if</span> <span class="fn">len</span>(s) <span class="op">&lt;=</span> n { s } <span class="kw">el</span> { s[:<span class="fn">n</span><span class="op">-</span><span class="fn">len</span>(suffix)] <span class="op">+</span> suffix }
+<span class="kw">df</span> <span class="fn">slug</span>(s) <span class="op">=</span> <span class="fn">J</span>(<span class="str">"-"</span>, <span class="fn">m</span>(<span class="fn">S</span>(s.lwr(), <span class="str">" "</span>), <span class="str">`</span>a<span class="str">`</span>))</code></pre>
+  </div>
+
+  <div class="example">
+    <div class="example-header">Using string_utils</div>
+    <pre><code><span class="kw">us</span> string_utils <span class="kw">as</span> su
+
+<span class="fn">p</span>(su.<span class="fn">capitalize</span>(<span class="str">"hello"</span>))         <span class="cmt"># Hello</span>
+<span class="fn">p</span>(su.<span class="fn">title_case</span>(<span class="str">"hello world"</span>))    <span class="cmt"># Hello World</span>
+<span class="fn">p</span>(su.<span class="fn">truncate</span>(<span class="str">"a long string"</span>, <span class="num">8</span>)) <span class="cmt"># a lon...</span>
+<span class="fn">p</span>(su.<span class="fn">slug</span>(<span class="str">"Hello World Test"</span>))     <span class="cmt"># hello-world-test</span></code></pre>
+    <div class="output">Hello<br>Hello World<br>a lon...<br>hello-world-test</div>
+  </div>
+
+  <!-- ===== Module Best Practices ===== -->
+  <h2>Module Best Practices</h2>
+  <ul>
+    <li>Always declare <code>xp [...]</code> to make your public API explicit.</li>
+    <li>Prefix internal helpers with <code>__</code> as a convention (they are hidden by default even without <code>xp</code>).</li>
+    <li>Place reusable modules in a <code>lib/</code> directory.</li>
+    <li>Modules are cached after first load -- side effects in the module body run only once.</li>
+    <li>Use <code>us module as alias</code> to avoid name collisions when importing multiple modules.</li>
+    <li>Use <code>us *module</code> sparingly -- it can pollute the namespace. Prefer qualified imports for larger projects.</li>
+  </ul>
+
+  <!-- ===== Import Cycles ===== -->
+  <h2>Import Cycles</h2>
+  <p>
+    Circular imports are detected at resolution time. By default, Snafu tolerates them
+    (the partially-initialized module is used). For stricter checking, add this at the top
+    of your program:
+  </p>
+  <div class="example">
+    <div class="example-header">Strict cycle detection</div>
+    <pre><code>opt strict_cycles <span class="kw">true</span></code></pre>
+  </div>
+
+  <hr>
+  <p>
+    For the complete keyword reference, see the <a href="reference.html">Reference Card</a>.
+    For a guided introduction to all features, see the <a href="tour.html">Language Tour</a>.
+  </p>
+</main>
+
+</body>
+</html>

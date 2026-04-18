@@ -1,0 +1,24 @@
+CXX = g++
+CXXFLAGS = -O2 -std=c++17 -Wall -Wno-unused-variable -pthread
+
+# Shared sources (lexer, parser, value, scope, eval, prelude)
+SHARED_SRCS = snafu_value.cpp snafu_scope.cpp snafu_lexer.cpp snafu_parser.cpp snafu_eval.cpp snafu_prelude.cpp
+
+# Tree-walker (original)
+TREEWALKER_SRCS = snafu_main.cpp $(SHARED_SRCS)
+TREEWALKER_TARGET = snafu
+
+# Bytecode VM
+VM_SRCS = snafu_vm_main.cpp snafu_bytecode.cpp $(SHARED_SRCS)
+VM_TARGET = snafu_vm
+
+all: $(TREEWALKER_TARGET) $(VM_TARGET)
+
+$(TREEWALKER_TARGET): $(TREEWALKER_SRCS) snafu.h
+	$(CXX) $(CXXFLAGS) -o $(TREEWALKER_TARGET) $(TREEWALKER_SRCS)
+
+$(VM_TARGET): $(VM_SRCS) snafu.h snafu_bytecode.h
+	$(CXX) $(CXXFLAGS) -o $(VM_TARGET) $(VM_SRCS)
+
+clean:
+	rm -f $(TREEWALKER_TARGET) $(TREEWALKER_TARGET).exe $(VM_TARGET) $(VM_TARGET).exe *.obj *.o

@@ -1,0 +1,67 @@
+# JSON data transformation pipeline
+# Features: to_json/from_json, pipelines, comprehensions, method chaining, srt
+
+# Sample dataset: list of employee records
+data = [
+  ["name": "Alice",   "dept": "eng",   "salary": 95000, "years": 5],
+  ["name": "Bob",     "dept": "sales", "salary": 72000, "years": 3],
+  ["name": "Charlie", "dept": "eng",   "salary": 110000, "years": 8],
+  ["name": "Diana",   "dept": "eng",   "salary": 88000, "years": 2],
+  ["name": "Eve",     "dept": "sales", "salary": 65000, "years": 1],
+  ["name": "Frank",   "dept": "hr",    "salary": 78000, "years": 4],
+  ["name": "Grace",   "dept": "hr",    "salary": 82000, "years": 6],
+  ["name": "Hank",    "dept": "sales", "salary": 91000, "years": 7]
+]
+
+p("=== Original Data (${len(data)} records) ===")
+p(to_json(data, 2))
+
+# Transform 1: Filter engineers earning > 90k
+p("\n=== Engineers earning > 90k ===")
+senior_eng = data
+  .filter(f(r) -> r.get("dept", "") == "eng" && r.get("salary", 0) > 90000)
+p(to_json(senior_eng, 2))
+
+# Transform 2: Add a "level" field based on years
+df add_level(record) {
+  yrs = record.get("years", 0)
+  level = mt true {
+    _ if yrs >= 7 -> "senior"
+    _ if yrs >= 3 -> "mid"
+    _             -> "junior"
+  }
+  r record.set("level", level)
+}
+
+enriched = data.map(f(r) -> add_level(r))
+p("\n=== With Levels ===")
+for r in enriched {
+  p("  ${r.get('name', '?')}: ${r.get('level', '?')}")
+}
+
+# Transform 3: Group by department and compute avg salary
+p("\n=== Department Summary ===")
+depts = data.group_by(f(r) -> r.get("dept", "?"))
+for [dept, members] in depts.items() {
+  salaries = members.map(f(r) -> r.get("salary", 0))
+  avg = sum(salaries) / len(salaries)
+  p("  ${dept}: ${len(members)} people, avg salary ${round(avg)}")
+}
+
+# Transform 4: Sort by salary descending, take top 3
+p("\n=== Top 3 Earners ===")
+top3 = srt(data, f(r) -> r.get("salary", 0), true).take(3)
+for [i, r] in en(top3) {
+  p("  ${i + 1}. ${r.get('name', '?')} - salary ${r.get('salary', 0)}")
+}
+
+# Transform 5: Build summary report as JSON
+report = [
+  "total_employees": len(data),
+  "total_payroll": sum(data.map(f(r) -> r.get("salary", 0))),
+  "departments": [dept for [dept, _] in depts.items()],
+  "avg_tenure": round(sum(data.map(f(r) -> r.get("years", 0))) / len(data))
+]
+
+p("\n=== Summary Report ===")
+p(to_json(report, 2))

@@ -1,0 +1,1184 @@
+# Self-interpreter: a Snafu interpreter written in Snafu
+#
+# Uses ast_of() to capture AST nodes, then pattern-matches on type(node)
+# to evaluate them.  This is the foundation for isrc[1].
+#
+# NATIVELY HANDLED (~47 types):
+#   Literals:   NumLit, StrLit (with interpolation), BoolLit, UndLit, OoLit
+#   Names:      Ident, VarVar ($name)
+#   Operators:  BinOp (extended ops), UnaryOp (with #), Ternary, FnPower (f^n)
+#   Access:     Index, Attr, SafeNav (?.),  Pipe (|>)
+#   Calls:      Call, Lambda, FnDecl (with decorators), Return
+#   Collections: ListExpr, CollElem, ListComp, RangeBy
+#   Control:    If, For, While, Loop, Break, Continue, Match/MatchArm
+#   GoTo:       Label, Goto, ComeFrom, Resume, JumpAbs, JumpRel
+#   Blocks:     Block, BlockExpr, Assign (with destructuring), ExprStmt
+#   Wrappers:   StrictBlock, LooseBlock, DynScope, DoSync
+#   Scoping:    Where, With, Defer
+#   Types:      SumDecl, Raise
+#   Exceptions: Try/Except
+#   Generators: CoroutineDecl, Yield
+#   Effects:    Perform, Handle (non-resumable)
+#
+# DELEGATED TO HOST (require Python primitives):
+#   EffectDecl, Slice, RegexLit, FrozenExpr, ReduceOp, ScanOp,
+#   PersistVar, Record, Query, StkBlock, GreenThread, Await,
+#   ExecSet, Fork, MacroDecl, Select, Use, Export, ProtoDecl,
+#   ImplDecl, On, Off, CondTrigger, Sub, LvDecl
+
+# --- Helper: dynamic attribute access via Python builtins ---
+_builtins = py.import("builtins")
+_ga = _builtins.getattr   # getattr(obj, name) -> value
+_sa = _builtins.setattr   # setattr(obj, name, value)
+
+# --- Scope: prototype object with parent chain ---
+
+df make_scope(parent) {
+    s = new()
+    s.parent = parent
+    s.vars = ["__dummy__": und]
+    s.get = f(name) -> {
+        if s.vars.has(name) { r s.vars[name] }
+        if type(s.parent) == "Obj" { r s.parent.get(name) }
+        rs NameErr("not found: " + name)
+    }
+    # set: walk parent chain to update existing binding, else create locally
+    s.set = f(name, val) -> {
+        if s.vars.has(name) { s.vars[name] = val; r val }
+        cur = s.parent
+        wh type(cur) == "Obj" {
+            if cur.vars.has(name) { cur.vars[name] = val; r val }
+            cur = cur.parent
+        }
+        s.vars[name] = val; val
+    }
+    # define: always create in current scope (for params, loop vars)
+    s.define = f(name, val) -> { s.vars[name] = val }
+    s
+}
+
+df is_node(v) { type(v).starts("AST") }
+
+# --- Pattern matcher for self-interpreter ---
+# Returns a dict of bindings on match, und on failure.
+df smatch(pattern, value) {
+    pt = type(pattern)
+    mt pt {
+        "AST:PatLit" -> {
+            if pattern.value == value { ["__ok__": true] } el { und }
+        }
+        "AST:PatWild" -> ["__ok__": true]
+        "AST:PatVar"  -> [pattern.name: value]
+        "AST:PatVariant" -> {
+            # Variant match: type(value) returns the variant name
+            if type(value) == pattern.name {
+                bindings = ["__ok__": true]
+                if len(pattern.fields) == 0 { r bindings }
+                # With fields: destructure using .fields tuple on Variant
+                vf = _ga(value, "fields")
+                for i in range(0, len(pattern.fields)) {
+                    sub = smatch(pattern.fields[i], vf[i])
+                    if type(sub) <> "Dct" { r und }
+                    for k in sub { bindings[k] = sub[k] }
+                }
+                bindings
+            } el { und }
+        }
+        _ -> und
+    }
+}
+
+# --- Comprehension clause evaluator (recursive) ---
+# Processes one clause at a time; when all clauses are processed, evaluates
+# the expression and pushes it into the result list.
+df _eval_comp_clause(clauses, idx, scope, expr, result) {
+    if idx >= len(clauses) {
+        result.psh(seval(expr, scope))
+        r und
+    }
+    clause = clauses[idx]
+    pattern = clause[0]   # PatVar node
+    iter_expr = clause[1] # iterable expression node
+    guard = clause[2]     # guard expression node or und
+
+    items = seval(iter_expr, scope)
+    for item in items {
+        child = make_scope(scope)
+        # pattern is a PatVar; bind its name
+        child.define(pattern.name, item)
+        if guard is not und {
+            if seval(guard, child) {
+                _eval_comp_clause(clauses, idx + 1, child, expr, result)
+            }
+        } el {
+            _eval_comp_clause(clauses, idx + 1, child, expr, result)
+        }
+    }
+    und
+}
+
+# --- Core evaluator ---
+
+df seval(node, scope) {
+    t = type(node)
+    mt t {
+        "AST:NumLit"  -> node.value
+        "AST:BoolLit" -> node.value
+        "AST:UndLit"  -> und
+        "AST:StrLit"  -> {
+            parts = []
+            for piece in node.pieces {
+                mt piece[0] {
+                    "str"    -> parts.psh(piece[1])
+                    "interp" -> {
+                        # piece[1] is a raw code string; eval it in host then
+                        # convert to string.  For simple ident lookups we try
+                        # the self-interp scope first so variables set inside
+                        # the self-interpreter are visible.
+                        name = piece[1]
+                        val = und
+                        ty { val = scope.get(name) } ex _e { val = ev(name) }
+                        parts.psh(str(val))
+                    }
+                }
+            }
+            "".join(parts)
+        }
+        "AST:OoLit"   -> oo
+        "AST:Ident" -> scope.get(node.name)
+
+        "AST:BinOp" -> {
+            op = node.op
+            # Short-circuit operators: must not evaluate rhs eagerly
+            if op == "&&" {
+                l = seval(node.lhs, scope)
+                if !l { l } el { seval(node.rhs, scope) }
+            } eli op == "||" {
+                l = seval(node.lhs, scope)
+                if l { l } el { seval(node.rhs, scope) }
+            } eli op == "??" {
+                l = seval(node.lhs, scope)
+                if l is not und { l } el { seval(node.rhs, scope) }
+            } el {
+                l = seval(node.lhs, scope)
+                r = seval(node.rhs, scope)
+                mt op {
+                    "+"  -> l + r;   "-"  -> l - r
+                    "*"  -> l * r;   "/"  -> l / r
+                    "%"  -> l % r;   "**" -> l ** r
+                    "==" -> l == r;  "<>" -> l <> r
+                    "<"  -> l < r;   ">"  -> l > r
+                    "<=" -> l <= r;  ">=" -> l >= r
+                    ".."  -> range(l, r)
+                    "..=" -> range(l, r + 1)
+                    "in"     -> _builtins.isinstance(r, _builtins.type([])) && _ga(r, "__contains__")(l)
+                    "not in" -> !(_builtins.isinstance(r, _builtins.type([])) && _ga(r, "__contains__")(l))
+                    "is"     -> l is r
+                    "is not" -> l is not r
+                    _    -> { rs "unknown binop: " + op }
+                }
+            }
+        }
+        "AST:UnaryOp" -> {
+            v = seval(node.operand, scope)
+            mt node.op {
+                "!" -> !v;  "-" -> -v;  "+" -> +v
+                "#" -> len(v)
+                _ -> { rs "unknown unaryop: " + node.op }
+            }
+        }
+
+        # --- Ternary: cond ? then : else ---
+        "AST:Ternary" -> {
+            if seval(node.cond, scope) { seval(node.then, scope) }
+            el { seval(node.else_, scope) }
+        }
+
+        # --- Pipeline: lhs |> rhs ---
+        "AST:Pipe" -> {
+            v = seval(node.lhs, scope)
+            rhs_t = type(node.rhs)
+            if rhs_t == "AST:Call" {
+                # rhs is a Call: evaluate its args, then insert v as first arg
+                fn = seval(node.rhs.fn, scope)
+                args = [v]
+                for arg in node.rhs.args { args.psh(seval(arg[1], scope)) }
+                fn(*args)
+            } el {
+                # rhs is an Ident or other expr: evaluate to a function, call with v
+                fn = seval(node.rhs, scope)
+                fn(v)
+            }
+        }
+
+        "AST:Call" -> {
+            fn = seval(node.fn, scope)
+            args = []
+            for arg in node.args { args.psh(seval(arg[1], scope)) }
+            fn(*args)
+        }
+        "AST:ExprStmt" -> seval(node.expr, scope)
+
+        "AST:Block" -> {
+            result = und
+            stmts = node.stmts
+            n = len(stmts)
+            # Check if this block needs control-flow machinery (goto/label/comefrom/jump)
+            _needs_cf = false
+            for _cfi in 0..n {
+                _cft = type(stmts[_cfi])
+                if _cft == "AST:Label" || _cft == "AST:ComeFrom" || _cft == "AST:Goto" || _cft == "AST:Resume" || _cft == "AST:JumpAbs" || _cft == "AST:JumpRel" {
+                    _needs_cf = true
+                }
+            }
+            if _needs_cf {
+                # Slow path: index-based loop with signal handling
+                comefroms = ["__dummy__": und]
+                for ci in 0..n {
+                    if type(stmts[ci]) == "AST:ComeFrom" { comefroms[stmts[ci].label] = ci + 1 }
+                }
+                _last_jump_idx = und
+                i = 0
+                wh i < n {
+                    stmt = stmts[i]
+                    ty {
+                        if type(stmt) == "AST:ComeFrom" {
+                            found_cf = false
+                            for cj in 0..n {
+                                if type(stmts[cj]) == "AST:Label" && stmts[cj].name == stmt.label {
+                                    i = cj + 1; found_cf = true
+                                }
+                            }
+                            if !found_cf { i = i + 1 }
+                        } eli type(stmt) == "AST:Label" && comefroms.has(stmt.name) {
+                            i = comefroms[stmt.name]
+                        } el {
+                            result = seval(stmt, scope); i = i + 1
+                        }
+                    } ex e {
+                        _msg = str(_ga(e, "msg"))
+                        if _msg.sw("__goto__:") {
+                            target = _msg.rpl("__goto__:", "")
+                            _last_jump_idx = i
+                            found_gt = false
+                            for gj in 0..n {
+                                if type(stmts[gj]) == "AST:Label" && stmts[gj].name == target {
+                                    i = gj + 1; found_gt = true
+                                }
+                            }
+                            if !found_gt { rs e }
+                        } eli _msg == "__resume__" {
+                            if _last_jump_idx is not und { i = _last_jump_idx + 1; _last_jump_idx = und }
+                            el { i = i + 1 }
+                        } eli _msg.sw("__jumpabs__:") {
+                            idx = ev(_msg.rpl("__jumpabs__:", ""))
+                            if idx >= 0 && idx < n { i = idx } el { rs e }
+                        } eli _msg.sw("__jumprel__:") {
+                            off = ev(_msg.rpl("__jumprel__:", ""))
+                            new_i = i + off
+                            if new_i >= 0 && new_i < n { i = new_i } el { rs e }
+                        } el { rs e }
+                    }
+                }
+            } el {
+                # Fast path: simple sequential evaluation (no goto/label/jump)
+                for stmt in stmts { result = seval(stmt, scope) }
+            }
+            # Execute deferred expressions in LIFO order
+            if scope.vars.has("__defers__") {
+                defers = scope.get("__defers__")
+                di = len(defers) - 1
+                wh di >= 0 {
+                    ty { seval(defers[di], scope) } ex _e {}
+                    di = di - 1
+                }
+            }
+            result
+        }
+        "AST:BlockExpr" -> {
+            result = und
+            for stmt in node.stmts { result = seval(stmt, scope) }
+            result
+        }
+
+        "AST:Assign" -> {
+            val = seval(node.value, scope)
+            tgt = node.target
+            tt = type(tgt)
+            if tt == "AST:Ident" {
+                scope.set(tgt.name, val)
+            } eli tt == "AST:ListExpr" {
+                # Destructuring: [a, b, c] = [1, 2, 3]
+                for i in 0..len(tgt.items) {
+                    item = tgt.items[i]
+                    scope.set(item.value.name, val[i])
+                }
+            } eli tt == "AST:Attr" {
+                # obj.field = val
+                obj = seval(tgt.target, scope)
+                if type(obj) == "Obj" {
+                    # SnafuObj: reach into Python-level .attrs dict
+                    _ga(obj, "attrs")[tgt.name] = val
+                } eli type(obj) == "Dct" {
+                    obj[tgt.name] = val
+                } el {
+                    _sa(obj, tgt.name, val)
+                }
+            } eli tt == "AST:Index" {
+                # obj[key] = val
+                obj = seval(tgt.target, scope)
+                key = seval(tgt.key, scope)
+                obj[key] = val
+            } el {
+                scope.set(tgt.name, val)
+            }
+            val
+        }
+
+        "AST:If" -> {
+            if seval(node.cond, scope) {
+                seval(node.then, scope)
+            } eli len(node.elifs) > 0 {
+                matched = false
+                result = und
+                for pair in node.elifs {
+                    if !matched && seval(pair[0], scope) {
+                        result = seval(pair[1], scope)
+                        matched = true
+                    }
+                }
+                if !matched && is_node(node.else_) {
+                    result = seval(node.else_, scope)
+                }
+                result
+            } eli is_node(node.else_) {
+                seval(node.else_, scope)
+            } el { und }
+        }
+
+        "AST:For" -> {
+            items = seval(node.iter, scope)
+            result = und
+            loop_scope = make_scope(scope)
+            _broke = false
+            for item in items {
+                if !_broke {
+                    loop_scope.define(node.pattern.name, item)
+                    ty {
+                        result = seval(node.body, loop_scope)
+                    } ex _ex {
+                        _msg = _ga(_ex, "msg")
+                        if _msg == "__break__" { _broke = true }
+                        eli _msg == "__continue__" { }
+                        el { rs _ex }
+                    }
+                }
+            }
+            result
+        }
+        "AST:Break" -> { rs "__break__" }
+        "AST:Continue" -> { rs "__continue__" }
+
+        "AST:FnDecl" -> {
+            params = node.params
+            body = node.body
+            fn_scope = scope
+            fn = f(*args) -> {
+                call_scope = make_scope(fn_scope)
+                for i in 0..len(params) {
+                    call_scope.define(params[i].name, args[i])
+                }
+                seval(body, call_scope)
+            }
+            scope.set(node.name, fn)
+            # Apply decorators in reverse order
+            if len(node.decorators) > 0 {
+                decorated = fn
+                decs = R(node.decorators)
+                for dec in decs {
+                    dec_fn = seval(dec, scope)
+                    decorated = dec_fn(decorated)
+                }
+                scope.set(node.name, decorated)
+            }
+            scope.get(node.name)
+        }
+
+        "AST:Lambda" -> {
+            params = node.params
+            body = node.body
+            fn_scope = scope
+            f(*args) -> {
+                call_scope = make_scope(fn_scope)
+                for i in 0..len(params) {
+                    call_scope.define(params[i].name, args[i])
+                }
+                seval(body, call_scope)
+            }
+        }
+
+        "AST:Return" -> {
+            if is_node(node.value) { r seval(node.value, scope) }
+            el { r und }
+        }
+
+        # --- While loops (with break/continue support) ---
+        "AST:While" -> {
+            result = und
+            _broke = false
+            if node.is_until {
+                wh !_broke && !seval(node.cond, scope) {
+                    ty {
+                        result = seval(node.body, scope)
+                    } ex _ex {
+                        _msg = _ga(_ex, "msg")
+                        if _msg == "__break__" { _broke = true }
+                        eli _msg == "__continue__" { }
+                        el { rs _ex }
+                    }
+                }
+            } el {
+                wh !_broke && seval(node.cond, scope) {
+                    ty {
+                        result = seval(node.body, scope)
+                    } ex _ex {
+                        _msg = _ga(_ex, "msg")
+                        if _msg == "__break__" { _broke = true }
+                        eli _msg == "__continue__" { }
+                        el { rs _ex }
+                    }
+                }
+            }
+            result
+        }
+
+        # --- Pattern matching ---
+        "AST:Match" -> {
+            target_val = seval(node.target, scope)
+            matched = false
+            result = und
+            for arm in node.arms {
+                if !matched {
+                    bindings = smatch(arm.pattern, target_val)
+                    if type(bindings) == "Dct" {
+                        arm_scope = make_scope(scope)
+                        for k in bindings { arm_scope.define(k, bindings[k]) }
+                        # guard check
+                        if is_node(arm.guard) {
+                            if seval(arm.guard, arm_scope) {
+                                result = seval(arm.body, arm_scope)
+                                matched = true
+                            }
+                        } el {
+                            result = seval(arm.body, arm_scope)
+                            matched = true
+                        }
+                    }
+                }
+            }
+            result
+        }
+
+        # --- Sum type declarations ---
+        "AST:SumDecl" -> {
+            # Delegate to host interpreter to register sum type + constructors.
+            eval_ast(node)
+            # The constructors are now in the host scope. Use ev("Name")
+            # to look them up by dynamic name string and copy to self-interp scope.
+            for vs in node.variants {
+                scope.set(vs.name, ev(vs.name))
+            }
+            und
+        }
+
+        # --- Try / Except ---
+        "AST:Try" -> {
+            result = und
+            ty {
+                result = seval(node.body, scope)
+            } ex e {
+                handled = false
+                for exc_clause in node.excepts {
+                    if !handled {
+                        exc_scope = make_scope(scope)
+                        if type(exc_clause.var_name) == "Str" {
+                            exc_scope.define(exc_clause.var_name, e)
+                        }
+                        result = seval(exc_clause.body, exc_scope)
+                        handled = true
+                    }
+                }
+                if !handled { rs e }
+            }
+            result
+        }
+
+        # --- List literals ---
+        "AST:ListExpr" -> {
+            result = []
+            for elem in node.items {
+                result.psh(seval(elem.value, scope))
+            }
+            result
+        }
+
+        # --- Index access ---
+        "AST:Index" -> {
+            target = seval(node.target, scope)
+            key = seval(node.key, scope)
+            target[key]
+        }
+
+        # --- Attribute access ---
+        "AST:Attr" -> {
+            target = seval(node.target, scope)
+            if type(target) == "Obj" {
+                # SnafuObj: reach into Python-level .attrs dict
+                _ga(target, "attrs")[node.name]
+            } eli type(target) == "Dct" {
+                target[node.name]
+            } el {
+                # For error objects, lists, etc. use Python getattr
+                _ga(target, node.name)
+            }
+        }
+
+        # --- Loop (lp N { body }) ---
+        "AST:Loop" -> {
+            count = und
+            if is_node(node.count) { count = seval(node.count, scope) }
+            i = 0
+            result = und
+            _broke = false
+            wh !_broke && (count is und || i < count) {
+                ty {
+                    result = seval(node.body, scope)
+                } ex _ex {
+                    _msg = _ga(_ex, "msg")
+                    if _msg == "__break__" { _broke = true }
+                    eli _msg == "__continue__" { }
+                    el { rs _ex }
+                }
+                i = i + 1
+            }
+            result
+        }
+
+        # --- List comprehension ---
+        "AST:ListComp" -> {
+            _comp_result = []
+            _eval_comp_clause(node.clauses, 0, scope, node.expr, _comp_result)
+            _comp_result
+        }
+
+        # --- Where clause ---
+        "AST:Where" -> {
+            child = make_scope(scope)
+            seval(node.bindings, child)
+            seval(node.expr, child)
+        }
+
+        # --- Quantifier (some/every) ---
+        "AST:Quantifier" -> {
+            it = seval(node.iter, scope)
+            found = und
+            for item in it {
+                child = make_scope(scope)
+                child.define(node.var, item)
+                result = seval(node.pred, child)
+                if node.kind == "some" && result { found = true }
+                if node.kind == "every" && !result { found = false }
+            }
+            if found is und {
+                # No short-circuit: return default
+                node.kind == "every"
+            } el { found }
+        }
+
+        # --- Defer ---
+        "AST:Defer" -> {
+            if scope.vars.has("__defers__") == false { scope.define("__defers__", []) }
+            scope.get("__defers__").psh(node.expr)
+            und
+        }
+
+        # --- With (context manager) ---
+        "AST:With" -> {
+            child = make_scope(scope)
+            for b in node.bindings {
+                val = seval(b.expr, scope)
+                if type(b.var) == "Str" {
+                    child.define(b.var, val)
+                }
+            }
+            seval(node.body, child)
+        }
+
+        # =============================================================
+        #  Group 1: Goto / Label / Control flow
+        # =============================================================
+
+        # --- Label: no-op (Block handler reads labels by scanning stmts) ---
+        "AST:Label" -> und
+
+        # --- Goto: raise a signal caught by Block ---
+        "AST:Goto" -> {
+            target_node = node.target
+            target_name = und
+            if type(target_node) == "AST:Ident" { target_name = target_node.name }
+            el { target_name = str(seval(target_node, scope)) }
+            rs "__goto__:" + target_name
+        }
+
+        # --- ComeFrom: no-op (Block handler registers comefroms by scanning) ---
+        "AST:ComeFrom" -> und
+
+        # --- Resume: jump back to last goto site ---
+        "AST:Resume" -> { rs "__resume__" }
+
+        # --- JumpAbs: raise signal with absolute index ---
+        "AST:JumpAbs" -> {
+            coords = []
+            for c in node.coords { coords.psh(seval(c, scope)) }
+            idx = coords[0]
+            rs "__jumpabs__:" + str(idx)
+        }
+
+        # --- JumpRel: raise signal with relative offset ---
+        "AST:JumpRel" -> {
+            offsets = []
+            for o in node.offsets { offsets.psh(seval(o, scope)) }
+            off = offsets[0]
+            rs "__jumprel__:" + str(off)
+        }
+
+        # =============================================================
+        #  Group 2: Generators (CoroutineDecl + Yield)
+        # =============================================================
+
+        # --- CoroutineDecl: create a factory that returns a generator ---
+        # Uses host threading (gt) for coroutine semantics.
+        "AST:CoroutineDecl" -> {
+            params = node.params
+            body = node.body
+            fn_scope = scope
+            factory = f(*args) -> {
+                ch_val = ch(1)
+                ch_send = ch(1)
+                gt {
+                    cs = make_scope(fn_scope)
+                    for pi in 0..len(params) { cs.define(params[pi].name, args[pi]) }
+                    cs.define("__yield_queue__", ch_val)
+                    cs.define("__send_queue__", ch_send)
+                    ty { seval(body, cs) } ex _e {}
+                    ch_val.send("__DONE__")
+                }
+                gen = new()
+                gen.nx = f() -> {
+                    v = ch_val.recv()
+                    if v == "__DONE__" { rs "StopIteration" }
+                    v
+                }
+                gen.sd = f(val) -> {
+                    ch_send.send(val)
+                    v = ch_val.recv()
+                    if v == "__DONE__" { rs "StopIteration" }
+                    v
+                }
+                gen
+            }
+            scope.set(node.name, factory)
+            und
+        }
+
+        # --- Yield: send value to the yield queue, wait for resume ---
+        "AST:Yield" -> {
+            val = und
+            if is_node(node.value) { val = seval(node.value, scope) }
+            scope.get("__yield_queue__").send(val)
+            # Wait for a value to be sent back (bidirectional yield)
+            ty { scope.get("__send_queue__").recv() } ex _e { und }
+        }
+
+        # =============================================================
+        #  Group 3: Algebraic effects (simplified, non-resumable)
+        # =============================================================
+
+        # --- EffectDecl: delegate to host (needs sum type registration) ---
+        "AST:EffectDecl" -> eval_ast(node)
+
+        # --- Perform: raise an effect signal ---
+        "AST:Perform" -> {
+            val = seval(node.expr, scope)
+            rs "__effect__:" + str(val)
+        }
+
+        # --- Handle: wrap body in ty/ex, catch effect signals ---
+        # Note: does NOT support resumable continuations (k) — handles
+        # the non-resumable, exception-like case only.
+        "AST:Handle" -> {
+            ty {
+                result = seval(node.body, scope)
+                # Check for return-value handler (PatVar without continuation)
+                ret_result = result
+                for hcase in node.cases {
+                    if type(hcase.pattern) == "AST:PatVar" && (hcase.cont_name is und) {
+                        hs = make_scope(scope)
+                        hs.define(hcase.pattern.name, result)
+                        ret_result = seval(hcase.body, hs)
+                    }
+                }
+                ret_result
+            } ex e {
+                _emsg = str(_ga(e, "msg"))
+                if _emsg.sw("__effect__:") {
+                    eff_str = _emsg.rpl("__effect__:", "")
+                    handled = false
+                    hresult = und
+                    for hcase in node.cases {
+                        if !handled {
+                            bindings = smatch(hcase.pattern, eff_str)
+                            if type(bindings) == "Dct" {
+                                hs = make_scope(scope)
+                                for k in bindings { hs.define(k, bindings[k]) }
+                                hresult = seval(hcase.body, hs)
+                                handled = true
+                            }
+                        }
+                    }
+                    if !handled { rs e }
+                    hresult
+                } el { rs e }
+            }
+        }
+
+        # =============================================================
+        #  Group 4: Simple node types
+        # =============================================================
+
+        # --- Slice: delegate to host (complex edge cases with Python slicing) ---
+        "AST:Slice" -> eval_ast(node)
+
+        # --- SafeNav (obj?.attr): return und if target is und ---
+        "AST:SafeNav" -> {
+            target = seval(node.target, scope)
+            if target is und { und }
+            el {
+                if type(target) == "Obj" { _ga(target, "attrs")[node.name] }
+                eli type(target) == "Dct" { target[node.name] }
+                el { _ga(target, node.name) }
+            }
+        }
+
+        # --- VarVar ($name): indirect variable lookup ---
+        "AST:VarVar" -> {
+            val = seval(node.expr, scope)
+            for _vi in 0..node.levels { val = scope.get(str(val)) }
+            val
+        }
+
+        # --- FnPower (f^n): repeated function application ---
+        "AST:FnPower" -> {
+            fn = seval(node.fn, scope)
+            n = seval(node.power, scope)
+            if n == 0 { f(x) -> x }
+            el {
+                f(*args) -> {
+                    result = fn(*args)
+                    for _fi in 1..n { result = fn(result) }
+                    result
+                }
+            }
+        }
+
+        # --- RegexLit: delegate to host (requires Python re module) ---
+        "AST:RegexLit" -> eval_ast(node)
+
+        # --- Raise: raise an exception with optional cause ---
+        "AST:Raise" -> {
+            if node.exc is und { rs "bare raise" }
+            val = seval(node.exc, scope)
+            rs val
+        }
+
+        # --- FrozenExpr: delegate to host (tuple/frozenset conversion) ---
+        "AST:FrozenExpr" -> eval_ast(node)
+
+        # --- ReduceOp (/op): fold a collection with an operator ---
+        "AST:ReduceOp" -> eval_ast(node)
+
+        # --- ScanOp (\op): cumulative fold of a collection ---
+        "AST:ScanOp" -> eval_ast(node)
+
+        # --- RangeBy (start..end by step): range with explicit step ---
+        "AST:RangeBy" -> {
+            s = seval(node.start, scope)
+            e = seval(node.end, scope)
+            st = seval(node.step, scope)
+            if node.inclusive { e = e + 1 }
+            range(s, e, st)
+        }
+
+        # =============================================================
+        #  Group 5: Block-level wrappers (eval body, mode is host-level)
+        # =============================================================
+
+        # --- DynScope: dynamic scoping is a host-level feature ---
+        "AST:DynScope" -> seval(node.body, scope)
+
+        # --- DoSync: STM transaction block, delegate to host ---
+        "AST:DoSync" -> seval(node.body, scope)
+
+        # --- StrictBlock: strict mode is host-level ---
+        "AST:StrictBlock" -> {
+            if is_node(node.body) { seval(node.body, scope) } el { und }
+        }
+
+        # --- LooseBlock: strict mode is host-level ---
+        "AST:LooseBlock" -> {
+            if is_node(node.body) { seval(node.body, scope) } el { und }
+        }
+
+        # =============================================================
+        #  Group 6: Delegated to host (require Python primitives)
+        # =============================================================
+
+        # --- PersistVar: requires filesystem + pickle (host primitive) ---
+        "AST:PersistVar" -> eval_ast(node)
+
+        # --- Record: execution recording requires host instrumentation ---
+        "AST:Record" -> eval_ast(node)
+
+        # --- Query: filter/map/sort chain (complex, delegate) ---
+        "AST:Query" -> eval_ast(node)
+
+        # --- StkBlock: Forth-style evaluator (complex, delegate) ---
+        "AST:StkBlock" -> eval_ast(node)
+
+        # --- GreenThread: requires Python threading (host primitive) ---
+        "AST:GreenThread" -> eval_ast(node)
+
+        # --- Await: requires Python threading (host primitive) ---
+        "AST:Await" -> eval_ast(node)
+
+        # --- ExecSet: concurrent execution requires threads (host primitive) ---
+        "AST:ExecSet" -> eval_ast(node)
+
+        # --- Fork: universe forking requires deep scope copy (host primitive) ---
+        "AST:Fork" -> eval_ast(node)
+
+        # --- MacroDecl: macro system requires AST splicing (host primitive) ---
+        "AST:MacroDecl" -> eval_ast(node)
+
+        # --- Select: channel multiplexing requires host channels (host primitive) ---
+        "AST:Select" -> eval_ast(node)
+
+        # --- Use/Export: module system requires filesystem (host primitive) ---
+        "AST:Use" -> eval_ast(node)
+        "AST:Export" -> eval_ast(node)
+
+        # --- ProtoDecl/ImplDecl: protocol system (host primitive) ---
+        "AST:ProtoDecl" -> eval_ast(node)
+        "AST:ImplDecl" -> eval_ast(node)
+
+        # --- Reactive: on/off/condtrigger (host primitive) ---
+        "AST:On" -> eval_ast(node)
+        "AST:Off" -> eval_ast(node)
+        "AST:CondTrigger" -> eval_ast(node)
+
+        # --- Sub: label-range execution (host primitive) ---
+        "AST:Sub" -> eval_ast(node)
+
+        # --- LvDecl: interpreter level switch (host primitive) ---
+        "AST:LvDecl" -> eval_ast(node)
+
+        _ -> eval_ast(node)   # fallback to host for unhandled forms
+    }
+}
+
+# ===== Demos =====
+
+global_scope = make_scope(und)
+global_scope.set("p", p)
+global_scope.set("str", str)
+global_scope.set("len", len)
+global_scope.set("type", type)
+global_scope.set("range", range)
+global_scope.set("sum", sum)
+global_scope.set("oo", oo)
+global_scope.set("R", R)
+global_scope.set("J", J)
+
+# Demo 1: arithmetic with variables
+result = seval(ast_of({ x = 5; y = x * 2 + 3; y }), global_scope)
+p("Self-interpreted result: " + str(result))
+
+# Demo 2: recursive fibonacci
+result2 = seval(ast_of({
+    df fib(n) { if n < 2 { n } el { fib(n - 1) + fib(n - 2) } }
+    fib(8)
+}), global_scope)
+p("Self-interpreted fib(8) = " + str(result2))
+
+# Demo 3: iterative fibonacci (reaches fib(10) without deep recursion)
+result3 = seval(ast_of({
+    df ifib(n) {
+        a = 0; b = 1
+        for i in range(0, n) { tmp = b; b = a + b; a = tmp }
+        a
+    }
+    ifib(10)
+}), global_scope)
+p("Self-interpreted fib(10) = " + str(result3))
+
+# Demo 4: factorial via loop
+result4 = seval(ast_of({
+    df fact(n) {
+        result = 1
+        for i in range(1, n + 1) { result = result * i }
+        result
+    }
+    fact(7)
+}), global_scope)
+p("Self-interpreted fact(7) = " + str(result4))
+
+# Demo 5: higher-order functions (lambda + closures)
+result5 = seval(ast_of({
+    df apply_twice(fn, x) { fn(fn(x)) }
+    inc = f(n) -> n + 1
+    apply_twice(inc, 5)
+}), global_scope)
+p("Self-interpreted apply_twice(inc, 5) = " + str(result5))
+
+# Demo 6: while loop
+result6 = seval(ast_of({
+    x = 0
+    wh x < 10 { x = x + 1 }
+    x
+}), global_scope)
+p("Self-interpreted while loop: " + str(result6))
+
+# Demo 7: pattern matching
+mt_scope = make_scope(und)
+mt_scope.set("p", p)
+mt_scope.set("str", str)
+result7 = seval(ast_of({
+    mt 5 {
+        1 -> "one"
+        5 -> "five"
+        _ -> "other"
+    }
+}), mt_scope)
+p("Self-interpreted match: " + str(result7))
+
+# Demo 8: pattern matching with variable binding
+result8 = seval(ast_of({
+    mt 42 {
+        0 -> "zero"
+        x -> "value is: " + str(x)
+    }
+}), mt_scope)
+p("Self-interpreted match with var: " + str(result8))
+
+# Demo 9: list literals and index access
+list_scope = make_scope(und)
+list_scope.set("p", p)
+list_scope.set("str", str)
+list_scope.set("len", len)
+result9 = seval(ast_of({
+    xs = [10, 20, 30]
+    xs[1]
+}), list_scope)
+p("Self-interpreted list index: " + str(result9))
+
+# Demo 10: attribute access
+_mk_obj = f() -> new()
+attr_scope = make_scope(und)
+attr_scope.set("p", p)
+attr_scope.set("str", str)
+attr_scope.set("mk_obj", _mk_obj)
+result10 = seval(ast_of({
+    o = mk_obj()
+    o.x = 5
+    o.y = 10
+    o.x + o.y
+}), attr_scope)
+p("Self-interpreted attr access: " + str(result10))
+
+# Demo 11: try/except
+te_scope = make_scope(und)
+te_scope.set("p", p)
+te_scope.set("str", str)
+te_scope.set("_ga", _ga)
+result11 = seval(ast_of({
+    ty {
+        rs "boom"
+    } ex e {
+        "caught: " + _ga(e, "msg")
+    }
+}), te_scope)
+p("Self-interpreted try/except: " + str(result11))
+
+# Demo 12: until loop (is_until = true)
+result12 = seval(ast_of({
+    count = 0
+    un count >= 5 { count = count + 1 }
+    count
+}), global_scope)
+p("Self-interpreted until loop: " + str(result12))
+
+# Demo 13: sum type variants + pattern matching on them
+sum_scope = make_scope(und)
+sum_scope.set("p", p)
+sum_scope.set("str", str)
+result13 = seval(ast_of({
+    sm Shape = Circle(radius) | Rect(w, h)
+    df area(s) {
+        mt s {
+            Circle(r) -> 3 * r * r
+            Rect(w, h) -> w * h
+        }
+    }
+    area(Circle(5)) + area(Rect(3, 4))
+}), sum_scope)
+p("Self-interpreted sum type: " + str(result13))
+
+# Demo 14: ternary expression
+tern_prog = ast_of({ 5 > 3 ? "yes" : "no" })
+p("Self-interp ternary: " + str(seval(tern_prog, global_scope)))
+
+# Demo 15: pipeline
+pipe_prog = ast_of({ [1,2,3,4,5] |> sum })
+p("Self-interp pipeline: " + str(seval(pipe_prog, global_scope)))
+
+# Demo 16: list comprehension
+comp_prog = ast_of({ [x*x for x in [1,2,3,4,5] if x > 2] })
+p("Self-interp comprehension: " + str(seval(comp_prog, global_scope)))
+
+# Demo 17: destructuring assignment
+destr_prog = ast_of({ [a, b, c] = [10, 20, 30]; a + b + c })
+p("Self-interp destructure: " + str(seval(destr_prog, global_scope)))
+
+# Demo 18: where clause
+whr_prog = ast_of({ x + y whr { x = 3; y = 4 } })
+p("Self-interp where: " + str(seval(whr_prog, global_scope)))
+
+# Demo 19: break in a loop
+break_prog = ast_of({
+    total = 0
+    for x in [1,2,3,4,5] {
+        if x == 4 { br }
+        total = total + x
+    }
+    total
+})
+p("Self-interp break: " + str(seval(break_prog, global_scope)))
+
+# Demo 20: continue in a loop
+cont_prog = ast_of({
+    total = 0
+    for x in [1,2,3,4,5] {
+        if x == 3 { cn }
+        total = total + x
+    }
+    total
+})
+p("Self-interp continue: " + str(seval(cont_prog, global_scope)))
+
+# Demo 21: loop (lp N)
+loop_prog = ast_of({
+    count = 0
+    lp 5 { count = count + 1 }
+    count
+})
+p("Self-interp loop: " + str(seval(loop_prog, global_scope)))
+
+# Demo 22: quantifiers
+quant_scope = make_scope(und)
+quant_scope.set("p", p)
+quant_scope.set("str", str)
+quant_scope.set("len", len)
+quant_scope.set("type", type)
+quant_scope.set("range", range)
+some_prog = ast_of({ some x in [1,2,3,4] if x > 3 })
+every_prog = ast_of({ every x in [2,4,6] if x > 0 })
+p("Self-interp some: " + str(seval(some_prog, quant_scope)))
+p("Self-interp every: " + str(seval(every_prog, quant_scope)))
+
+# Demo 23: extended binops (range, null coalesce, in)
+range_prog = ast_of({ sum(0..5) })
+p("Self-interp range sum: " + str(seval(range_prog, global_scope)))
+
+coalesce_prog = ast_of({ und ?? 42 })
+p("Self-interp coalesce: " + str(seval(coalesce_prog, global_scope)))
+
+# Demo 24: unary # (length) — # is the comment char in source, so we build the AST manually.
+_hash_node = ast_new("Block", stmts=[ast_new("ExprStmt", expr=ast_new("UnaryOp", op="#", operand=ast_new("ListExpr", items=[ast_new("CollElem", kind="pos", value=ast_new("NumLit", value=10)), ast_new("CollElem", kind="pos", value=ast_new("NumLit", value=20)), ast_new("CollElem", kind="pos", value=ast_new("NumLit", value=30))])))])
+p("Self-interp unary #: " + str(seval(_hash_node, global_scope)))
+
+# Demo 25: decorator
+dec_scope = make_scope(und)
+dec_scope.set("p", p)
+dec_scope.set("str", str)
+dec_scope.set("len", len)
+dec_scope.set("type", type)
+dec_scope.set("range", range)
+dec_prog = ast_of({
+    df double_result(fn) {
+        f(a, b) -> fn(a, b) * 2
+    }
+    @double_result
+    df add(a, b) { a + b }
+    add(3, 4)
+})
+p("Self-interp decorator: " + str(seval(dec_prog, dec_scope)))
+
+# Demo 26: goto / label
+goto_scope = make_scope(und)
+goto_scope.set("p", p)
+goto_scope.set("str", str)
+goto_prog = ast_of({ x = 0; lbl top; x = x + 1; if x < 3 { goto top }; x })
+p("Self-interp goto: " + str(seval(goto_prog, goto_scope)))
+
+# Demo 27: VarVar ($name)
+vv_scope = make_scope(und)
+vv_scope.set("p", p)
+vv_scope.set("str", str)
+vv_prog = ast_of({ name = "x"; x = 42; $name })
+p("Self-interp varvar: " + str(seval(vv_prog, vv_scope)))
+
+# Demo 28: FnPower (f^n)
+fp_scope = make_scope(und)
+fp_scope.set("p", p)
+fp_scope.set("str", str)
+fp_scope.set("range", range)
+fp_prog = ast_of({ inc = f(x) -> x + 1; inc3 = inc^3; inc3(0) })
+p("Self-interp fn^3: " + str(seval(fp_prog, fp_scope)))
+
+# Demo 29: SafeNav (obj?.attr)
+sn_scope = make_scope(und)
+sn_scope.set("p", p)
+sn_scope.set("str", str)
+sn_prog = ast_of({ und?.x })
+p("Self-interp safenav: " + str(seval(sn_prog, sn_scope)))
+
+# Demo 30: Raise
+raise_scope = make_scope(und)
+raise_scope.set("p", p)
+raise_scope.set("str", str)
+raise_scope.set("_ga", _ga)
+raise_prog = ast_of({ ty { rs "kaboom" } ex e { "caught: " + _ga(e, "msg") } })
+p("Self-interp raise: " + str(seval(raise_prog, raise_scope)))
+
+# Demo 31: StrictBlock / LooseBlock (just eval body)
+sb_prog = ast_of({ sd { 2 + 3 } })
+p("Self-interp strict: " + str(seval(sb_prog, global_scope)))
+
+# Demo 32: RangeBy (start..end by step)
+rb_scope = make_scope(und)
+rb_scope.set("p", p)
+rb_scope.set("str", str)
+rb_scope.set("sum", sum)
+rb_scope.set("range", range)
+rb_prog = ast_of({ sum(0..10 by 2) })
+p("Self-interp rangeby: " + str(seval(rb_prog, rb_scope)))

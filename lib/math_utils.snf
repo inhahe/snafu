@@ -1,0 +1,39 @@
+# Math utilities module
+# Reusable math functions for common operations.
+#
+# Usage:
+#   us math_utils
+#   p(math_utils.clamp(15, 0, 10))   # 10
+#   p(math_utils.lerp(0, 100, 0.5))  # 50
+#   p(math_utils.dist(0, 0, 3, 4))   # 5.0
+
+xp [clamp, lerp, smoothstep, deg2rad, rad2deg, dist, normalize]
+
+# Clamp x to the range [lo, hi]
+df clamp(x, lo, hi) = min([max([x, lo]), hi])
+
+# Linear interpolation between a and b by factor t (0..1)
+df lerp(a, b, t) = a + (b - a) * t
+
+# Smooth Hermite interpolation between edge0 and edge1
+df smoothstep(edge0, edge1, x) {
+    t = clamp((x - edge0) / (edge1 - edge0), 0, 1)
+    t * t * (3 - 2 * t)
+}
+
+# Convert degrees to radians
+df deg2rad(d) = d * pi / 180
+
+# Convert radians to degrees
+df rad2deg(r) = r * 180 / pi
+
+# Euclidean distance between two 2D points
+df dist(x1, y1, x2, y2) = sqrt((x2-x1)**2 + (y2-y1)**2)
+
+# Normalize a list so its elements sum to 1.
+# Returns the original list if the total is 0.
+df normalize(lst) {
+    total = sum(lst)
+    if total == 0 { lst }
+    el { m(lst, `a / total`) }
+}

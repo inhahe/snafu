@@ -1,0 +1,145 @@
+# Algebraic effects showcase
+# Features: ef/pf/hd, multi-shot continuations, pattern matching
+
+p("=== Algebraic Effects Demo ===\n")
+
+# --- Effect 1: Logging ---
+p("--- Logging Effect ---")
+ef Log(msg)
+
+df do_work() {
+  pf Log("starting computation")
+  result = 21 * 2
+  pf Log("computed result = ${result}")
+  result
+}
+
+# Handle Log by printing to console
+val = hd {
+  do_work()
+} with {
+  Log(msg) k -> { p("  [LOG] ${msg}"); k(und) }
+  v -> v
+}
+p("result = ${val}\n")
+
+# Handle Log by collecting into a list (atom for mutable state)
+log_buf = atom([])
+val = hd {
+  do_work()
+} with {
+  Log(msg) k -> { log_buf.swap(f(l) -> l + [msg]); k(und) }
+  v -> v
+}
+p("collected logs: ${log_buf.get()}")
+p("result = ${val}\n")
+
+# --- Effect 2: State as an effect ---
+p("--- State Effect ---")
+ef Get()
+ef Put(val)
+
+df run_stateful(initial) {
+  st = atom(initial)
+  hd {
+    a = pf Get
+    pf Put(a + 10)
+    b = pf Get
+    pf Put(b * 2)
+    c = pf Get
+    c
+  } with {
+    Get k -> k(st.get())
+    Put(val) k -> { st.set(val); k(und) }
+    v -> ["result": v, "final": st.get()]
+  }
+}
+
+out = run_stateful(5)
+p("initial=5 -> ${out}")
+
+out = run_stateful(100)
+p("initial=100 -> ${out}\n")
+
+# --- Effect 3: Nondeterministic choice (multi-shot continuations) ---
+p("--- Choose Effect (Nondeterminism) ---")
+ef Choose(options)
+
+# Handle Choose: k is multi-shot, called once per option
+# Each k(option) replays body from scratch with that choice
+all_results = hd {
+  a = pf Choose([1, 2, 3])
+  b = pf Choose(["a", "b"])
+  [[a, b]]
+} with {
+  Choose(options) k -> {
+    results = []
+    for opt in options {
+      branch = k(opt)
+      results = results + branch
+    }
+    results
+  }
+  v -> v
+}
+
+p("all pairs from Choose([1,2,3]) x Choose([a,b]):")
+for pair in all_results {
+  p("  ${pair}")
+}
+
+# --- Effect 4: Failure effect ---
+p("\n--- Fail Effect ---")
+ef Fail(reason)
+
+df safe_div(a, b) {
+  if b == 0 { pf Fail("division by zero") }
+  a / b
+}
+
+# Handle Fail by returning a default
+val = hd {
+  safe_div(10, 0)
+} with {
+  Fail(reason) k -> { p("  caught: ${reason}"); -1 }
+  v -> v
+}
+p("safe_div(10, 0) = ${val}")
+
+val = hd {
+  safe_div(10, 3)
+} with {
+  Fail(reason) k -> -1
+  v -> v
+}
+p("safe_div(10, 3) = ${val}")
+
+# --- Effect 5: Combining effects in one handler ---
+p("\n--- Combined: Choose + Emit ---")
+ef Emit(val)
+
+emitted = atom([])
+
+val = hd {
+  n = pf Choose([10, 20, 30])
+  pf Emit(n * n)
+  [[n, n * n]]
+} with {
+  Choose(options) k -> {
+    results = []
+    for opt in options {
+      results = results + k(opt)
+    }
+    results
+  }
+  Emit(val) k -> {
+    emitted.swap(f(l) -> l + [val])
+    k(und)
+  }
+  v -> v
+}
+
+p("results: ${val}")
+p("emitted values: ${emitted.get()}")
+
+p("\nDone!")

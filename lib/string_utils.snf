@@ -1,0 +1,25 @@
+# String utilities module
+# Common string manipulation functions.
+#
+# Usage:
+#   us string_utils
+#   p(string_utils.capitalize("hello"))       # Hello
+#   p(string_utils.title_case("hello world")) # Hello World
+#   p(string_utils.slug("Hello World"))        # hello-world
+
+xp [capitalize, title_case, pad_center, truncate, slug]
+
+# Capitalize the first character of a string
+df capitalize(s) = s[0].upr() + s[1:]
+
+# Title-case: capitalize the first letter of each word
+df title_case(s) = J(" ", m(S(s, " "), `capitalize(a)`))
+
+# Center a string within a given width, padded with ch
+df pad_center(s, width, ch=" ") = s.cpad(width, ch)
+
+# Truncate a string to at most n characters, appending suffix if truncated
+df truncate(s, n, suffix="...") = if len(s) <= n { s } el { s[:n-len(suffix)] + suffix }
+
+# Convert a string to a URL-friendly slug (lowercase, hyphens)
+df slug(s) = J("-", m(S(s.lwr(), " "), `a`))

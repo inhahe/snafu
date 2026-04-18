@@ -1,0 +1,39 @@
+# Mini grep: search files with regex and print matching lines
+# Features: regex literals (=~), file I/O, pipelines, comprehensions, en()
+
+df grep(path, pat) {
+  content = ""
+  ty {
+    content = read(path)
+  } ex e {
+    p("error: cannot read '${path}': ${e.msg}")
+    r und
+  }
+
+  lines = content.lines()
+  matches = 0
+
+  for [num, line] in en(lines) {
+    result = line =~ pat
+    if type(result) <> "Und" {
+      p("${path}:${num + 1}: ${line}")
+      matches = matches + 1
+    }
+  }
+
+  if matches == 0 {
+    p("no matches found")
+  } el {
+    p("---")
+    p("${matches} match(es) in ${len(lines)} lines")
+  }
+}
+
+# Main: prompt for file and pattern
+p("Minigrep -- search files with regex")
+path = inp("file: ")
+pattern_str = inp("pattern: ")
+
+# Build regex from user input
+pat = ev("r/${pattern_str}/i")
+grep(path, pat)

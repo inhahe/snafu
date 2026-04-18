@@ -1,0 +1,79 @@
+# Interactive calculator with variables, history, and undo
+# Features: ev(), inp(), ps/sa/restore, pattern matching, loops
+
+vars = ["ans": 0]
+history = []
+snap_count = 0
+
+# Save initial state
+ps("init")
+snap_count = 1
+
+p("Snafu Calculator -- type expressions, 'undo', 'history', 'vars', or 'quit'")
+
+lp {
+  line = inp("calc> ")
+  cmd = line.trim()
+
+  if cmd == "" { cn }
+
+  mt cmd {
+    "quit" -> { p("bye"); br }
+    "history" -> {
+      if len(history) == 0 {
+        p("  (no history)")
+      } el {
+        for [i, entry] in en(history) {
+          p("  [${i}] ${entry}")
+        }
+      }
+    }
+    "vars" -> {
+      for [k, v] in vars.items() {
+        p("  ${k} = ${v}")
+      }
+    }
+    "undo" -> {
+      if snap_count <= 1 {
+        p("  nothing to undo")
+      } el {
+        snap = sa(snap_count - 2)
+        restore(snap)
+        binds = snap.get("bindings", [])
+        snap_count = binds.get("snap_count", snap_count)
+        p("  undone")
+      }
+    }
+    _ -> {
+      # Check for variable assignment: "name = expr"
+      parts = cmd.split("=")
+      is_assign = len(parts) == 2 && !(parts[0].trim().has(" ")) && len(parts[0].trim()) > 0
+      if is_assign {
+        vname = parts[0].trim()
+        ty {
+          val = ev(parts[1].trim())
+          vars = vars.set(vname, val)
+          p("  ${vname} = ${val}")
+        } ex e {
+          p("  error: ${e.msg}")
+        }
+      } el {
+        ty {
+          # Make variables available for eval
+          for [k, v] in vars.items() {
+            ev("${k} = ${v}")
+          }
+          result = ev(cmd)
+          vars = vars.set("ans", result)
+          history = history + ["${cmd} = ${result}"]
+          # Save state for undo
+          ps()
+          snap_count = snap_count + 1
+          p("  = ${result}")
+        } ex e {
+          p("  error: ${e.msg}")
+        }
+      }
+    }
+  }
+}
