@@ -1,0 +1,49 @@
+# Find primes using parallel universe forking
+# Features: fk_map, trial division, pipelines, comprehensions
+
+df is_prime(n) {
+  if n < 2 { r false }
+  if n < 4 { r true }
+  if n % 2 == 0 || n % 3 == 0 { r false }
+  i = 5
+  wh i * i <= n {
+    if n % i == 0 || n % (i + 2) == 0 { r false }
+    i = i + 6
+  }
+  r true
+}
+
+# Split range into chunks for parallel processing
+limit = 200
+chunk_size = 50
+chunks = [range(i, min(i + chunk_size, limit + 1)) for i in range(2, limit + 1, chunk_size)]
+
+p("Finding primes up to ${limit} using ${len(chunks)} parallel forks...")
+
+# Each fork checks a chunk and returns the primes in it
+df find_primes_in_chunk(chunk) {
+  [n for n in chunk if is_prime(n)]
+}
+
+# Fork into parallel universes
+futures = fk_map(chunks, find_primes_in_chunk)
+
+# Collect results from all futures
+all_primes = []
+for fut in futures {
+  result = aw fut
+  all_primes = all_primes + result
+}
+
+all_primes = srt(all_primes)
+
+p("Found ${len(all_primes)} primes:")
+p(all_primes)
+
+# Verify with sequential check
+seq_primes = [n for n in range(2, limit + 1) if is_prime(n)]
+if len(all_primes) == len(seq_primes) {
+  p("\nVerified: parallel result matches sequential (${len(seq_primes)} primes)")
+} el {
+  p("\nMismatch! parallel=${len(all_primes)}, sequential=${len(seq_primes)}")
+}

@@ -1,0 +1,14 @@
+# Classic FizzBuzz in Snafu
+
+df fizzbuzz(n) {
+  for i in range(1, n + 1) {
+    mt [i % 3, i % 5] {
+      [0, 0] -> p("FizzBuzz")
+      [0, _] -> p("Fizz")
+      [_, 0] -> p("Buzz")
+      _      -> p(i)
+    }
+  }
+}
+
+fizzbuzz(15)

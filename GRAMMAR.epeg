@@ -1,0 +1,416 @@
+# ============================================================================
+# Snafu language grammar — scannerless EPEG
+# Corresponds to SPEC.md v0.1. Target parser: gpda_scannerless.py.
+#
+# Conventions:
+#   UPPERCASE rules  = atomic (token-like), no auto-_
+#   lowercase rules  = grammar rules, auto-_ inserted between elements
+#   _name            = skip rule (invisible unless explicitly referenced)
+#
+# Section numbers in comments refer to SPEC.md.
+# ============================================================================
+
+start program
+
+# ============================================================================
+# §3 — whitespace, comments, newlines
+# ============================================================================
+
+_ws    = /[ \t\r\n]+/ @skip
+_semi  = /;/ @skip
+_lcmt  = /#[^\n]*/ @skip
+_bcmt  = '#{' _bcmt_body '}#' @skip
+_bcmt_body = (_bcmt | !'}#' .)*
+
+
+# ============================================================================
+# §2 — keywords
+# ============================================================================
+
+@keyword 'if' 'el' 'eli' 'mt' 'for' 'in' 'wh' 'un' 'lp'
+@keyword 'bf' 'bt' 'af' 'br' 'cn' 'r' 'y' 'yf' 'goto' 'cf' 'rm' 'sub' 'lbl'
+@keyword 'ty' 'ex' 'fi' 'rs' 'fr' 'sd' 'ld'
+@keyword 'df' 'f'
+@keyword 'sm' 'pr' 'im' 'dv' 'ef' 'mc'
+@keyword 'pf' 'hd' 'with'
+@keyword 'sc' 'ca' 'tp' 'ev'
+@keyword 'gt' 'as' 'aw' 'sl' 'ch' 'pc' 'dosync'
+@keyword 'atom' 'ref' 'agent'
+@keyword 'on' 'of'
+@keyword 'us' 'unuse' 'xp' 'al' 'sv' 'sh'
+@keyword 'ps' 'sa' 'sp' 'st'
+@keyword 'src' 'ast' 'isrc' 'iast' 'lv'
+@keyword 'bp' 'db' 'ct' 'ge'
+@keyword 'und' 'true' 'false' 'oo'
+@keyword 'wi' 'xs'
+@keyword 'new' 'is' 'to'
+
+
+# ============================================================================
+# §8 — operator precedence (lowest first)
+# ============================================================================
+
+@left '|>' '|>>'
+@right '<-' '->' '!<-' '!->'
+@left '||' '!||'
+@left '^^' '!^^'
+@left '&&' '!&&'
+@nonassoc '==' '<>' '===' '!==' '<' '>' '<=' '>=' '!<' '!>' 'is' 'in'
+@left '..' '..='
+@left '+' '-'
+@left '*' '/' '%'
+@right '**' '//'
+
+
+# ============================================================================
+# Top level (§9)
+# ============================================================================
+
+program = lv_decl? stmt_seq
+stmt_seq = stmt*
+
+lv_decl = 'lv' INT
+
+stmt = declaration | control_stmt | simple_stmt | block
+
+simple_stmt = assignment | expr_stmt
+expr_stmt = expr
+
+
+# ============================================================================
+# Declarations (§§11, 15, 16, 18, 20, 22, 25)
+# ============================================================================
+
+declaration = fn_decl | sum_decl | proto_decl | impl_decl | effect_decl | macro_decl | module_decl | label_decl | var_decl
+
+# ---- functions ----
+fn_decl = 'df' IDENT fn_params fn_body
+fn_params = '(' param_list ')' | '(' ')'
+param_list = param param_rest*
+param_rest = ',' param
+param = type_annot IDENT default_opt | IDENT default_opt | '*' IDENT | '**' IDENT | '/' | '*'
+type_annot = IDENT
+default_opt = ('=' expr)?
+fn_body = block | '=' expr | '->' expr
+
+fn_literal = 'f' fn_params fn_body | 'f' fn_body | 'f' '->' expr
+
+# ---- sum types ----
+sum_decl = 'sm' IDENT '=' variant_list derivation_opt
+variant_list = variant variant_rest*
+variant_rest = '|' variant
+variant = IDENT '(' param_list ')' | IDENT '(' ')' | IDENT
+derivation_opt = (derivation)?
+derivation = 'dv' '[' proto_list ']'
+proto_list = IDENT proto_list_rest*
+proto_list_rest = ',' IDENT
+
+# ---- protocols ----
+proto_decl = 'pr' IDENT proto_inherit_opt '{' proto_methods '}'
+proto_inherit_opt = ('ex' proto_list)?
+proto_methods = proto_method*
+proto_method = IDENT fn_params default_body_opt
+default_body_opt = ('=' expr | block)?
+# ---- protocol implementations ----
+impl_decl = 'im' IDENT 'for' IDENT '{' impl_methods '}'
+impl_methods = impl_method*
+impl_method = IDENT '(' pattern_params_opt ')' impl_body
+pattern_params_opt = (pattern_params)?
+pattern_params = pattern pattern_params_rest*
+pattern_params_rest = ',' pattern
+impl_body = '=' expr | block
+
+# ---- effects ----
+effect_decl = 'ef' IDENT '(' param_list ')' | 'ef' IDENT '(' ')'
+
+# ---- macros ----
+macro_decl = 'mc' IDENT fn_params fn_body
+
+# ---- modules ----
+module_decl = use_decl | unuse_decl | export_decl | alias_decl
+use_decl = 'us' use_items use_block_opt
+use_items = use_item use_items_rest*
+use_items_rest = ',' use_item
+use_item = '*' IDENT use_as_opt | IDENT use_as_opt
+use_as_opt = ('as' IDENT)?
+use_block_opt = (block)?
+unuse_decl = 'unuse' IDENT
+export_decl = 'xp' '[' name_list ']'
+name_list = IDENT name_list_rest*
+name_list_rest = ',' IDENT
+alias_decl = 'al' IDENT '=' expr
+
+# ---- labels ----
+label_decl = 'lbl' IDENT | 'lbl' STRING
+
+# ---- static/shelved vars ----
+var_decl = 'sv' IDENT '=' expr | 'sh' IDENT '=' expr
+
+
+# ============================================================================
+# Control flow (§§17–20, 22–24)
+# ============================================================================
+
+control_stmt = if_stmt | for_stmt | while_stmt | until_stmt | loop_stmt | match_stmt | try_stmt | handle_stmt | perform_stmt | with_stmt | sd_stmt | ld_stmt | break_stmt | continue_stmt | return_stmt | yield_stmt | goto_stmt | comefrom_stmt | resume_stmt | sub_stmt | raise_stmt | on_stmt | off_stmt | xs_stmt | spawn_stmt | dosync_stmt | pushstate_stmt
+
+# ---- if ----
+if_stmt = 'if' expr block elif_list else_opt
+elif_list = elif_clause*
+elif_clause = 'eli' expr block
+else_opt = ('el' block)?
+# ---- for ----
+for_stmt = 'for' for_pattern 'in' expr for_filter_opt block loop_tail
+for_pattern = pattern | '(' pattern_params ')'
+for_filter_opt = (for_filter)?
+for_filter = for_filter_kw expr for_un_opt
+for_filter_kw = 'if' | 'wh' | 'un'
+for_un_opt = ('un' expr)?
+# ---- while / until / loop ----
+while_stmt = 'wh' expr block loop_tail
+until_stmt = 'un' expr block loop_tail
+loop_stmt = 'lp' INT block loop_tail | 'lp' block loop_tail
+
+loop_tail = bf_opt bt_opt af_opt loop_else_opt loop_fi_opt
+bf_opt = ('bf' block)?
+bt_opt = ('bt' block)?
+af_opt = ('af' block)?
+loop_else_opt = ('el' block)?
+loop_fi_opt = ('fi' block)?
+# ---- match ----
+match_stmt = 'mt' expr '{' match_arms '}'
+match_arms = match_arm match_arm_tail*
+match_arm_tail = arm_sep match_arm
+match_arm = pattern guard_opt '->' arm_body
+arm_sep = ',' | ';'
+guard_opt = ('if' expr)?
+arm_body = block | expr
+# ---- try ----
+try_stmt = 'ty' block except_clauses finally_opt | 'ty' block finally_clause
+except_clauses = except_clause+
+except_clause = 'ex' type_annot IDENT block | 'ex' IDENT block | 'ex' block
+finally_opt = (finally_clause)?
+finally_clause = 'fi' block
+
+# ---- handle ----
+handle_stmt = 'hd' hd_target 'with' '{' handler_cases '}'
+hd_target = block | expr
+handler_cases = handler_case handler_case_tail*
+handler_case_tail = arm_sep handler_case
+handler_case = pattern IDENT '->' arm_body | pattern '->' arm_body
+
+# ---- perform ----
+perform_stmt = 'pf' expr
+
+# ---- with ----
+with_stmt = 'wi' with_bindings block
+with_bindings = with_binding with_bindings_rest*
+with_bindings_rest = ',' with_binding
+with_binding = expr 'as' IDENT | expr
+
+# ---- strict / loose mode blocks ----
+sd_stmt = 'sd' block | 'sd'
+ld_stmt = 'ld' block | 'ld'
+
+# ---- loop control ----
+break_stmt = 'br' INT | 'br'
+continue_stmt = 'cn' cn_amount | 'cn'
+cn_amount = '+' INT | '-' INT | INT
+return_stmt = 'r' expr | 'r'
+yield_stmt = 'y' expr | 'y' | 'yf' expr
+
+# ---- jumps ----
+goto_stmt = 'goto' IDENT | 'goto' '[' expr ']'
+comefrom_stmt = 'cf' IDENT comefrom_mod
+comefrom_mod = (IDENT ':' expr)?
+resume_stmt = 'rm' STRING | 'rm'
+sub_stmt = 'sub' '(' expr ',' expr ')'
+
+# ---- raise ----
+raise_stmt = 'rs' expr raise_from | 'rs' raise_from | 'rs'
+raise_from = ('fr' expr)?
+# ---- reactive ----
+on_stmt = 'on' expr block
+off_stmt = 'of' expr | 'of' 'all'
+
+# ---- execution sets ----
+xs_stmt = 'xs' xs_opts block | 'xs' block
+xs_opts = xs_opt xs_opts_rest*
+xs_opts_rest = ',' xs_opt
+xs_opt = IDENT ':' expr
+
+# ---- concurrency ----
+spawn_stmt = gt_stmt | as_stmt | pc_stmt | aw_stmt
+gt_stmt = 'gt' block | 'gt' call_expr
+as_stmt = 'as' IDENT '=' expr | 'as' expr
+pc_stmt = 'pc' block | 'pc' call_expr
+aw_stmt = 'aw' expr aw_tm | 'aw' expr
+aw_tm = ('tm' INT)?
+dosync_stmt = 'dosync' block
+call_expr = IDENT call_postfix+
+call_postfix = '(' call_args ')' | '(' ')' | '.' IDENT | '[' subscript ']'
+
+# ---- state push ----
+pushstate_stmt = 'ps' STRING | 'ps'
+
+
+# ============================================================================
+# Blocks (§9)
+# ============================================================================
+
+block = '{' stmt_seq '}'
+
+
+# ============================================================================
+# Patterns (§12)
+# ============================================================================
+
+pattern = pattern_or
+pattern_or = pattern_or '|' pattern_as | pattern_as
+pattern_as = IDENT '@' pattern_atom | pattern_atom
+pattern_atom = pattern_literal | pattern_wildcard | pattern_list | pattern_regex | pattern_var | '(' pattern ')'
+pattern_literal = NUMBER | STRING | 'und' | 'true' | 'false'
+pattern_wildcard = '_'
+pattern_var = IDENT
+pattern_list = '[' pattern_list_body ']' | '[' ']'
+pattern_list_body = pattern_elem pattern_list_rest*
+pattern_list_rest = ',' pattern_elem
+pattern_elem = '...' IDENT | '**' IDENT | pattern_pair | pattern
+pattern_pair = STRING ':' pattern | IDENT ':' pattern | NUMBER ':' pattern
+pattern_regex = REGEX pattern_regex_as
+pattern_regex_as = ('as' pattern_atom)?
+# ============================================================================
+# Expressions (§8)
+# ============================================================================
+
+expr = ternary
+ternary = binop '?' expr ':' expr | binop
+
+binop = binop '|>' binop | binop '|>>' binop
+      | binop '<-' binop | binop '->' binop | binop '!<-' binop | binop '!->' binop
+      | binop '||' binop | binop '!||' binop
+      | binop '^^' binop | binop '!^^' binop
+      | binop '&&' binop | binop '!&&' binop
+      | binop '==' binop | binop '<>' binop | binop '===' binop | binop '!==' binop
+      | binop '<' binop | binop '>' binop | binop '<=' binop | binop '>=' binop
+      | binop '!<' binop | binop '!>' binop
+      | binop 'is' binop | binop 'in' binop
+      | binop '..' binop | binop '..=' binop
+      | binop '+' binop | binop '-' binop
+      | binop '*' binop | binop '/' binop | binop '%' binop
+      | binop '**' binop | binop '//' binop
+      | unary
+
+unary = '+' unary | '-' unary | '!' unary | '~' unary | '#' unary | postfix
+
+postfix = postfix '(' call_args ')'
+        | postfix '(' ')'
+        | postfix '[' subscript ']'
+        | postfix '.' IDENT
+        | postfix '^' unary
+        | primary
+
+call_args = call_arg call_args_rest*
+call_args_rest = ',' call_arg
+call_arg = '*' expr | '**' expr | IDENT '=' expr | '_' | expr
+
+subscript = slice | index_list
+slice = slice_start ':' slice_end slice_more
+slice_start = (expr)?
+slice_end = (expr)?
+slice_more = (':' slice_step slice_win_opt)?
+slice_step = (expr)?
+slice_win_opt = (':' slice_win slice_inc_opt)?
+slice_win = (expr)?
+slice_inc_opt = (':' slice_inc)?
+slice_inc = (expr)?
+index_list = expr index_list_rest*
+index_list_rest = ',' expr
+
+assignment = lvalue '=' expr | lvalue compound_op expr | lvalue ':=' expr | lvalue '~=' expr
+compound_op = '+=' | '-=' | '*=' | '/=' | '//=' | '%=' | '**=' | '<>=' | '&&=' | '||=' | '^^=' | '!&&=' | '!||=' | '!^^=' | '.='
+
+lvalue = lvalue '.' IDENT | lvalue '[' subscript ']' | '(' lvalue_list ')' | '[' lvalue_list ']' | '*' IDENT | IDENT
+lvalue_list = lvalue lvalue_list_rest*
+lvalue_list_rest = ',' lvalue
+
+primary = literal | scope_ref | varvar | regex_subst | abs_bars | fn_literal | collection | paren_expr | IDENT
+paren_expr = '(' expr ')'
+
+abs_bars = '|' expr '|'
+
+scope_ref = scope_name scope_path
+scope_name = 'sc' | 'ca' | 'tp' | 'ev'
+scope_path = scope_step*
+scope_step = '.' IDENT | '[' expr ']'
+
+varvar = scope_prefix_opt '$' varvar_tail
+scope_prefix_opt = (scope_name '.')?
+varvar_tail = IDENT | '(' expr ')' | '{' expr '}' | '$' varvar_tail
+
+regex_subst = 's' '/' regex_body '/' regex_body '/' regex_flags_opt | 'tr' '/' regex_body '/' regex_body '/' regex_flags_opt | 'mx' '/' regex_body '/' regex_flags_opt
+
+
+# ============================================================================
+# Collections (§6)
+# ============================================================================
+
+collection = '[' collection_body ']' | '[' ']'
+collection_body = collection_elem collection_rest*
+collection_rest = ',' collection_elem
+collection_elem = '...' expr | expr ':' expr | expr
+
+block_value = block
+
+
+# ============================================================================
+# Literals (§§4, 5, 26)
+# ============================================================================
+
+literal = NUMBER | STRING | 'und' | 'true' | 'false' | 'oo' | REGEX
+
+
+# ============================================================================
+# §4 — numbers (atomic)
+# ============================================================================
+
+NUMBER = NUM_FLOAT | NUM_BIN | NUM_HEX | NUM_OCT | NUM_INT
+NUM_INT = /[0-9][0-9_]*/ @longest
+NUM_FLOAT = /[0-9][0-9_]*\.[0-9][0-9_]*([eE][+\-]?[0-9][0-9_]*)?/ @longest
+NUM_BIN = /[01][01_]*b/ @longest
+NUM_HEX = /[0-9a-fA-F][0-9a-fA-F_]*h/ @longest
+NUM_OCT = /[0-7][0-7_]*o/ @longest
+
+
+# ============================================================================
+# §5 — strings
+# ============================================================================
+
+STRING = STR_DOUBLE | STR_SINGLE
+STR_DOUBLE = '"' str_d_piece* '"' @atomic
+str_d_piece = STR_INTERP | STR_ESCAPE | STR_D_CHAR
+STR_D_CHAR = !'"' !'\\' !'$' .
+STR_INTERP = '${' expr '}'
+STR_ESCAPE = '\\' .
+STR_SINGLE = "'" str_s_piece* "'" @atomic
+str_s_piece = "\\\\" | "\\'" | STR_S_CHAR
+STR_S_CHAR = !"'" !'\\' .
+
+
+# ============================================================================
+# §26 — regex literals
+# ============================================================================
+
+REGEX = 'r' '/' regex_body '/' regex_flags_opt @atomic
+regex_body = regex_piece*
+regex_piece = regex_escape | REGEX_CHAR
+regex_escape = '\\' .
+REGEX_CHAR = !'/' .
+regex_flags_opt = /[imsxgu]*/
+
+
+# ============================================================================
+# §§2–3 — identifiers
+# ============================================================================
+
+IDENT = /[A-Za-z_][A-Za-z_0-9]*/ @longest
+INT = /[0-9]+/ @longest

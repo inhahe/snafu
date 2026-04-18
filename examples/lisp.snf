@@ -1,0 +1,212 @@
+# A tiny Lisp interpreter in Snafu
+# Features: sum types, pattern matching, recursion, closures, string parsing
+
+# --- AST ---
+sm Expr = Num(n) | Sym(s) | Lst(items) | LispFn(params, body, env_ref)
+
+# --- Tokenizer: split "(+ 1 2)" into ["(", "+", "1", "2", ")"] ---
+df tokenize(src) {
+  tokens = []
+  i = 0
+  wh i < len(src) {
+    ch = src[i]
+    mt ch {
+      " " -> { i = i + 1 }
+      "(" -> { tokens = tokens + ["("]; i = i + 1 }
+      ")" -> { tokens = tokens + [")"]; i = i + 1 }
+      _   -> {
+        start = i
+        wh i < len(src) && src[i] <> " " && src[i] <> "(" && src[i] <> ")" {
+          i = i + 1
+        }
+        tokens = tokens + [src[start:i]]
+      }
+    }
+  }
+  tokens
+}
+
+# --- Parser: tokens -> Expr ---
+df parse(tokens) {
+  result = parse_at(tokens, 0)
+  result[0]
+}
+
+df parse_at(tokens, pos) {
+  if pos >= len(tokens) { rs "unexpected end of input" }
+  tok = tokens[pos]
+  if tok == "(" {
+    elts = []
+    pos = pos + 1
+    wh pos < len(tokens) && tokens[pos] <> ")" {
+      result = parse_at(tokens, pos)
+      elts = elts + [result[0]]
+      pos = result[1]
+    }
+    if pos >= len(tokens) { rs "missing closing )" }
+    [Lst(elts), pos + 1]
+  } el {
+    # Try number, else symbol
+    ty {
+      num = int(tok)
+      [Num(num), pos + 1]
+    } ex _ {
+      ty {
+        num = flt(tok)
+        [Num(num), pos + 1]
+      } ex _ {
+        [Sym(tok), pos + 1]
+      }
+    }
+  }
+}
+
+# --- Environment using prototype objects ---
+df env_new(parent) {
+  env = new()
+  env._parent = parent
+  env._binds = []
+  env
+}
+
+df env_get(env, name) {
+  for pair in env._binds {
+    if pair[0] == name { r pair[1] }
+  }
+  if type(env._parent) <> "Und" { r env_get(env._parent, name) }
+  rs "undefined: ${name}"
+}
+
+df env_set(env, name, val) {
+  env._binds = env._binds + [[name, val]]
+}
+
+# --- Evaluator ---
+df lisp_eval(expr, env) {
+  mt expr {
+    Num(n) -> n
+    Sym(s) -> env_get(env, s)
+    LispFn(pp, bb, ee) -> expr
+    Lst(items) -> {
+      if len(items) == 0 { r [] }
+      head = items[0]
+
+      # Special forms
+      mt head {
+        Sym("define") -> {
+          name = mt items[1] { Sym(s) -> s; _ -> { rs "define expects symbol" } }
+          val = lisp_eval(items[2], env)
+          env_set(env, name, val)
+          val
+        }
+        Sym("if") -> {
+          cond = lisp_eval(items[1], env)
+          if cond <> 0 && cond <> false {
+            lisp_eval(items[2], env)
+          } el {
+            if len(items) > 3 { lisp_eval(items[3], env) } el { 0 }
+          }
+        }
+        Sym("lambda") -> {
+          param_list = mt items[1] { Lst(ps) -> ps; _ -> { rs "lambda params must be list" } }
+          param_names = param_list.map(f(pm) -> mt pm { Sym(s) -> s; _ -> { rs "param must be symbol" } })
+          bod = items[2]
+          LispFn(param_names, bod, env)
+        }
+        Sym("quote") -> {
+          mt items[1] {
+            Num(n) -> n
+            Sym(s) -> s
+            Lst(elts) -> elts
+            _ -> items[1]
+          }
+        }
+        _ -> {
+          # Function application
+          fn_val = lisp_eval(head, env)
+          args = [lisp_eval(a, env) for a in items.drop(1)]
+          apply_fn(fn_val, args)
+        }
+      }
+    }
+  }
+}
+
+df apply_fn(fn_val, args) {
+  mt fn_val {
+    LispFn(params, body, closure_env) -> {
+      call_env = env_new(closure_env)
+      for [i, name] in en(params) {
+        env_set(call_env, name, args[i])
+      }
+      lisp_eval(body, call_env)
+    }
+    _ -> {
+      # Must be a built-in (Snafu callable)
+      fn_val(args)
+    }
+  }
+}
+
+# --- Standard environment with builtins ---
+df make_stdlib() {
+  env = env_new(und)
+  env_set(env, "+",    f(args) -> rdc(args, f(a, b) -> a + b, 0))
+  env_set(env, "-",    f(args) -> if len(args) == 1 { -args[0] } el { args[0] - args[1] })
+  env_set(env, "*",    f(args) -> rdc(args, f(a, b) -> a * b, 1))
+  env_set(env, "/",    f(args) -> args[0] / args[1])
+  env_set(env, "=",    f(args) -> args[0] == args[1])
+  env_set(env, "<",    f(args) -> args[0] < args[1])
+  env_set(env, ">",    f(args) -> args[0] > args[1])
+  env_set(env, "list", f(args) -> args)
+  env_set(env, "car",  f(args) -> args[0][0])
+  env_set(env, "cdr",  f(args) -> args[0].drop(1))
+  env_set(env, "null?", f(args) -> len(args[0]) == 0)
+  env_set(env, "not",  f(args) -> if args[0] { false } el { true })
+  env_set(env, "print", f(args) -> { for a in args { p(a) }; und })
+  env
+}
+
+# --- Run a Lisp program string ---
+df run_lisp(src, env) {
+  tokens = tokenize(src)
+  expr = parse(tokens)
+  lisp_eval(expr, env)
+}
+
+# === Demo ===
+p("=== Tiny Lisp Interpreter ===\n")
+stdlib = make_stdlib()
+
+# Basic arithmetic
+p("(+ 1 2 3) = ${run_lisp('(+ 1 2 3)', stdlib)}")
+p("(* 4 (+ 2 3)) = ${run_lisp('(* 4 (+ 2 3))', stdlib)}")
+p("(- 10 3) = ${run_lisp('(- 10 3)', stdlib)}")
+
+# Variables
+run_lisp("(define x 42)", stdlib)
+p("(define x 42) then x = ${run_lisp('x', stdlib)}")
+
+# Lambda
+run_lisp("(define square (lambda (n) (* n n)))", stdlib)
+p("(square 7) = ${run_lisp('(square 7)', stdlib)}")
+
+# Conditionals
+run_lisp("(define abs (lambda (n) (if (< n 0) (- n) n)))", stdlib)
+p("(abs -5) = ${run_lisp('(abs -5)', stdlib)}")
+p("(abs 3) = ${run_lisp('(abs 3)', stdlib)}")
+
+# Recursive factorial
+run_lisp("(define fact (lambda (n) (if (= n 0) 1 (* n (fact (- n 1))))))", stdlib)
+p("(fact 10) = ${run_lisp('(fact 10)', stdlib)}")
+
+# Higher-order: apply twice
+run_lisp("(define twice (lambda (fn x) (fn (fn x))))", stdlib)
+run_lisp("(define inc (lambda (n) (+ n 1)))", stdlib)
+p("(twice inc 5) = ${run_lisp('(twice inc 5)', stdlib)}")
+
+# Fibonacci
+run_lisp("(define fib (lambda (n) (if (< n 2) n (+ (fib (- n 1)) (fib (- n 2))))))", stdlib)
+p("(fib 10) = ${run_lisp('(fib 10)', stdlib)}")
+
+p("\nDone!")

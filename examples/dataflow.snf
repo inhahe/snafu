@@ -1,0 +1,78 @@
+# Spreadsheet-like reactive data flow
+# Uses tracking bindings (~=) and on triggers
+# Demo: a simple financial model where changing inputs auto-updates everything
+
+p("=== Reactive Dataflow Demo ===\n")
+
+# --- Input cells ---
+revenue  = 1000
+cost     = 600
+tax_rate = 0.2
+
+# --- Computed cells (auto-update when inputs change) ---
+profit   ~= revenue - cost
+tax      ~= profit * tax_rate
+net      ~= profit - tax
+margin   ~= flt(profit) / flt(revenue) * 100
+
+# --- Triggers: log when values change ---
+on revenue.ch {
+  p("  [trigger] revenue -> ${revenue}")
+}
+
+on cost.ch {
+  p("  [trigger] cost -> ${cost}")
+}
+
+on tax_rate.ch {
+  p("  [trigger] tax_rate -> ${tax_rate}")
+}
+
+# --- Display helper ---
+df show_model() {
+  p("  revenue:  ${revenue}")
+  p("  cost:     ${cost}")
+  p("  profit:   ${profit}")
+  p("  tax_rate: ${tax_rate}")
+  p("  tax:      ${tax}")
+  p("  net:      ${net}")
+  p("  margin:   ${margin}%")
+}
+
+# --- Initial state ---
+p("Initial model:")
+show_model()
+
+# --- Scenario 1: revenue doubles ---
+p("\n--- Revenue doubles ---")
+revenue = 2000
+show_model()
+
+# --- Scenario 2: cut costs ---
+p("\n--- Cut costs to 400 ---")
+cost = 400
+show_model()
+
+# --- Scenario 3: raise tax rate ---
+p("\n--- Tax rate raised to 30% ---")
+tax_rate = 0.3
+show_model()
+
+# --- Scenario 4: multiple changes ---
+p("\n--- New scenario: startup ---")
+revenue = 500
+cost = 800
+tax_rate = 0.15
+show_model()
+
+# --- Conditional trigger ---
+p("\n--- Adding profit alert ---")
+on profit < 0 {
+  p("  ** ALERT: operating at a loss! profit = ${profit}")
+}
+
+p("Setting revenue = 200 (triggers loss alert):")
+revenue = 200
+show_model()
+
+p("\nDone!")

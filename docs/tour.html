@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Language Tour - Snafu</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav>
+  <a class="logo" href="index.html">Snafu</a>
+  <div class="links">
+    <a href="index.html">Home</a>
+    <a href="tour.html" class="active">Language Tour</a>
+    <a href="reference.html">Reference</a>
+    <a href="packages.html">Packages</a>
+  </div>
+</nav>
+
+<main>
+  <h1>Language Tour</h1>
+  <p>A walkthrough of Snafu's features with code examples. Each section shows input code and expected output.</p>
+
+  <!-- ===== Variables & Arithmetic ===== -->
+  <h2>Variables and Arithmetic</h2>
+  <p>
+    Snafu has integers (arbitrary precision), floats, rationals, and complex numbers.
+    Division of integers produces exact rationals, not floats.
+  </p>
+
+  <div class="example">
+    <div class="example-header">Number types</div>
+    <pre><code>x <span class="op">=</span> <span class="num">42</span>
+pi <span class="op">=</span> <span class="num">3.14159</span>
+ratio <span class="op">=</span> <span class="num">1</span> <span class="op">/</span> <span class="num">3</span>                     <span class="cmt"># Rat(1, 3), not 0.333...</span>
+z <span class="op">=</span> <span class="num">1</span> <span class="op">+</span> <span class="num">2i</span>                        <span class="cmt"># complex</span>
+hex <span class="op">=</span> <span class="num">ffh</span>                         <span class="cmt"># 255</span>
+bin <span class="op">=</span> <span class="num">1010b</span>                       <span class="cmt"># 10</span></code></pre>
+  </div>
+
+  <!-- ===== Strings ===== -->
+  <h2>Strings with Interpolation</h2>
+  <p>
+    Double-quoted strings interpolate <code>${expr}</code> (or bare <code>$name</code>).
+    Single-quoted strings are literal.
+  </p>
+
+  <div class="example">
+    <div class="example-header">String interpolation</div>
+    <pre><code>name <span class="op">=</span> <span class="str">"world"</span>
+<span class="fn">p</span>(<span class="str">"Hello, ${name}!"</span>)               <span class="cmt"># Hello, world!</span>
+<span class="fn">p</span>(<span class="str">"2 + 2 = ${2 + 2}"</span>)             <span class="cmt"># 2 + 2 = 4</span></code></pre>
+    <div class="output">Hello, world!<br>2 + 2 = 4</div>
+  </div>
+
+  <!-- ===== Collections ===== -->
+  <h2>Collections</h2>
+  <p>
+    A single <code>[...]</code> literal covers lists, dicts, and mixed collections.
+    Curly braces <code>{...}</code> are always code blocks.
+  </p>
+
+  <div class="example">
+    <div class="example-header">Lists and dicts</div>
+    <pre><code>nums <span class="op">=</span> [<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>, <span class="num">4</span>, <span class="num">5</span>]
+dict <span class="op">=</span> [<span class="str">"name"</span>: <span class="str">"Alice"</span>, <span class="str">"age"</span>: <span class="num">30</span>]
+mixed <span class="op">=</span> [<span class="num">1</span>, <span class="num">2</span>, <span class="str">"key"</span>: <span class="str">"val"</span>]
+nums[<span class="num">0</span>]                            <span class="cmt"># 1</span>
+dict[<span class="str">"name"</span>]                       <span class="cmt"># "Alice"</span></code></pre>
+  </div>
+
+  <!-- ===== Control Flow ===== -->
+  <h2>Control Flow</h2>
+  <p>
+    Short keywords: <code>if</code>, <code>eli</code> (elif), <code>el</code> (else),
+    <code>wh</code> (while), <code>mt</code> (match), <code>for</code>.
+  </p>
+
+  <div class="example">
+    <div class="example-header">Conditionals and loops</div>
+    <pre><code><span class="cmt"># if / elif / else</span>
+<span class="kw">if</span> x <span class="op">></span> <span class="num">0</span> { <span class="fn">p</span>(<span class="str">"pos"</span>) }
+<span class="kw">eli</span> x <span class="op">==</span> <span class="num">0</span> { <span class="fn">p</span>(<span class="str">"zero"</span>) }
+<span class="kw">el</span> { <span class="fn">p</span>(<span class="str">"neg"</span>) }
+
+<span class="cmt"># for loop with ranges</span>
+<span class="kw">for</span> i <span class="kw">in</span> <span class="num">1</span>..<span class="op">=</span><span class="num">5</span> { <span class="fn">p</span>(i) }
+
+<span class="cmt"># while</span>
+<span class="kw">wh</span> x <span class="op">></span> <span class="num">0</span> { x <span class="op">=</span> x <span class="op">-</span> <span class="num">1</span> }</code></pre>
+  </div>
+
+  <div class="example">
+    <div class="example-header">Pattern matching</div>
+    <pre><code><span class="kw">mt</span> value {
+  <span class="num">0</span>          <span class="op">-></span> <span class="str">"zero"</span>
+  <span class="num">1</span> <span class="op">|</span> <span class="num">2</span> <span class="op">|</span> <span class="num">3</span>  <span class="op">-></span> <span class="str">"small"</span>
+  n <span class="kw">if</span> n <span class="op"><</span> <span class="num">0</span> <span class="op">-></span> <span class="str">"negative"</span>
+  _          <span class="op">-></span> <span class="str">"other"</span>
+}</code></pre>
+  </div>
+
+  <!-- ===== Functions ===== -->
+  <h2>Functions</h2>
+  <p>Three forms, from verbose to terse.</p>
+
+  <div class="example">
+    <div class="example-header">Function definitions</div>
+    <pre><code><span class="cmt"># named function</span>
+<span class="kw">df</span> <span class="fn">square</span>(x) <span class="op">=</span> x <span class="op">*</span> x
+
+<span class="cmt"># anonymous function</span>
+double <span class="op">=</span> <span class="kw">f</span>(x) <span class="op">-></span> x <span class="op">*</span> <span class="num">2</span>
+
+<span class="cmt"># backtick lambda (shortest form)</span>
+<span class="fn">m</span>([<span class="num">1</span>,<span class="num">2</span>,<span class="num">3</span>], <span class="str">`</span>a<span class="op">*</span><span class="num">2</span><span class="str">`</span>)                  <span class="cmt"># [2, 4, 6]</span></code></pre>
+    <div class="output">[2, 4, 6]</div>
+  </div>
+
+  <div class="example">
+    <div class="example-header">Lambda comparison (same operation, different lengths)</div>
+    <pre><code><span class="kw">f</span>(x) <span class="op">-></span> x <span class="op">*</span> <span class="num">2</span>              <span class="cmt"># 18 chars (explicit params)</span>
+<span class="kw">f</span> <span class="op">-></span> a <span class="op">*</span> <span class="num">2</span>                 <span class="cmt"># 12 chars (implicit, arrow)</span>
+<span class="str">`</span>a <span class="op">*</span> <span class="num">2</span><span class="str">`</span>                     <span class="cmt">#  7 chars (backtick)</span>
+<span class="str">`</span>a<span class="op">*</span><span class="num">2</span><span class="str">`</span>                       <span class="cmt">#  5 chars (minimal)</span></code></pre>
+  </div>
+
+  <!-- ===== Pipelines ===== -->
+  <h2>Pipelines and Composition</h2>
+
+  <div class="example">
+    <div class="example-header">Pipeline operator</div>
+    <pre><code>[<span class="num">1</span>,<span class="num">2</span>,<span class="num">3</span>,<span class="num">4</span>,<span class="num">5</span>] <span class="op">|></span> <span class="fn">fl</span>(<span class="str">`</span>a%<span class="num">2</span><span class="op">==</span><span class="num">0</span><span class="str">`</span>) <span class="op">|></span> <span class="fn">m</span>(<span class="str">`</span>a<span class="op">*</span>a<span class="str">`</span>)   <span class="cmt"># [4, 16]</span>
+
+<span class="cmt"># compose functions with +</span>
+both <span class="op">=</span> (<span class="kw">f</span>(x) <span class="op">-></span> x <span class="op">+</span> <span class="num">1</span>) <span class="op">+</span> (<span class="kw">f</span>(x) <span class="op">-></span> x <span class="op">*</span> <span class="num">2</span>)</code></pre>
+    <div class="output">[4, 16]</div>
+  </div>
+
+  <!-- ===== Sum Types ===== -->
+  <h2>Sum Types and Pattern Matching</h2>
+  <p>
+    Declare algebraic data types with <code>sm</code>, then destructure them in
+    <code>mt</code> blocks or function heads.
+  </p>
+
+  <div class="example">
+    <div class="example-header">Sum types</div>
+    <pre><code><span class="kw">sm</span> Shape <span class="op">=</span> Circle(r) <span class="op">|</span> Rect(w, h)
+
+<span class="kw">df</span> <span class="fn">area</span>(s) {
+  <span class="kw">mt</span> s {
+    Circle(r)  <span class="op">-></span> <span class="num">3.14159</span> <span class="op">*</span> r <span class="op">*</span> r
+    Rect(w, h) <span class="op">-></span> w <span class="op">*</span> h
+  }
+}
+
+<span class="fn">area</span>(Circle(<span class="num">5</span>))                    <span class="cmt"># 78.53975</span></code></pre>
+    <div class="output">78.53975</div>
+  </div>
+
+  <!-- ===== Generators ===== -->
+  <h2>Generators</h2>
+
+  <div class="example">
+    <div class="example-header">Fibonacci generator</div>
+    <pre><code><span class="kw">ct</span> <span class="fn">fibonacci</span>() {
+  a <span class="op">=</span> <span class="num">0</span>; b <span class="op">=</span> <span class="num">1</span>
+  <span class="kw">lp</span> {
+    <span class="kw">y</span> a                            <span class="cmt"># yield</span>
+    tmp <span class="op">=</span> a; a <span class="op">=</span> b; b <span class="op">=</span> tmp <span class="op">+</span> b
+  }
+}
+
+<span class="fn">take</span>(<span class="fn">fibonacci</span>(), <span class="num">8</span>)               <span class="cmt"># [0, 1, 1, 2, 3, 5, 8, 13]</span></code></pre>
+    <div class="output">[0, 1, 1, 2, 3, 5, 8, 13]</div>
+  </div>
+
+  <!-- ===== APL ===== -->
+  <h2>APL-Style Array Operations</h2>
+  <p>
+    Operator modifiers turn any arithmetic op into element-wise, reduce, scan, or outer product.
+  </p>
+
+  <div class="example">
+    <div class="example-header">Array operators</div>
+    <pre><code>[<span class="num">1</span>,<span class="num">2</span>,<span class="num">3</span>] <span class="op">+.</span> [<span class="num">10</span>,<span class="num">20</span>,<span class="num">30</span>]             <span class="cmt"># [11, 22, 33]  element-wise</span>
+<span class="op">+/</span> [<span class="num">1</span>,<span class="num">2</span>,<span class="num">3</span>,<span class="num">4</span>]                      <span class="cmt"># 10             reduce (sum)</span>
+<span class="op">+\</span> [<span class="num">1</span>,<span class="num">2</span>,<span class="num">3</span>,<span class="num">4</span>]                      <span class="cmt"># [1, 3, 6, 10]  scan (running sum)</span>
+[<span class="num">1</span>,<span class="num">2</span>,<span class="num">3</span>] <span class="op">*..</span> [<span class="num">4</span>,<span class="num">5</span>]                 <span class="cmt"># [[4,5],[8,10],[12,15]] outer product</span></code></pre>
+    <div class="output">[11, 22, 33]<br>10<br>[1, 3, 6, 10]<br>[[4, 5], [8, 10], [12, 15]]</div>
+  </div>
+
+  <!-- ===== Error Handling ===== -->
+  <h2>Error Handling</h2>
+
+  <div class="example">
+    <div class="example-header">try / except / finally</div>
+    <pre><code><span class="kw">ty</span> {
+  result <span class="op">=</span> <span class="fn">risky_operation</span>()
+} <span class="kw">ex</span> ValErr e {
+  <span class="fn">p</span>(<span class="str">"caught: "</span> <span class="op">+</span> <span class="fn">str</span>(e))
+} <span class="kw">fi</span> {
+  <span class="fn">cleanup</span>()
+}</code></pre>
+  </div>
+
+  <div class="example">
+    <div class="example-header">Try-pipe for Result types</div>
+    <pre><code><span class="num">5</span> <span class="op">|?></span> <span class="kw">f</span>(x) <span class="op">-></span> x <span class="op">*</span> <span class="num">2</span>               <span class="cmt"># ["ok", 10]</span>
+<span class="num">0</span> <span class="op">|?></span> <span class="kw">f</span>(x) <span class="op">-></span> <span class="num">1</span><span class="op">/</span>x                 <span class="cmt"># ["err", "division by zero"]</span>
+
+<span class="fn">unwrap</span>([<span class="str">"ok"</span>, <span class="num">42</span>])                 <span class="cmt"># 42</span>
+<span class="fn">unwrap_or</span>([<span class="str">"err"</span>, <span class="str">"bad"</span>], <span class="op">-</span><span class="num">1</span>)      <span class="cmt"># -1</span></code></pre>
+  </div>
+
+  <!-- ===== Prototype OOP ===== -->
+  <h2>Prototype-Based OOP</h2>
+  <p>No classes -- objects clone from prototypes via <code>new</code>.</p>
+
+  <div class="example">
+    <div class="example-header">Prototype objects</div>
+    <pre><code>Animal <span class="op">=</span> <span class="fn">new</span>()
+Animal.name <span class="op">=</span> <span class="str">"unknown"</span>
+Animal.speak <span class="op">=</span> <span class="kw">f</span>(self) <span class="op">-></span> self.name <span class="op">+</span> <span class="str">" says hello"</span>
+dog <span class="op">=</span> <span class="fn">new</span>(Animal); dog.name <span class="op">=</span> <span class="str">"Rex"</span>
+<span class="fn">p</span>(dog.speak(dog))                  <span class="cmt"># Rex says hello</span></code></pre>
+    <div class="output">Rex says hello</div>
+  </div>
+
+  <!-- ===== Algebraic Effects ===== -->
+  <h2>Algebraic Effects</h2>
+  <p>Effects generalize exceptions, generators, and async into one mechanism.</p>
+
+  <div class="example">
+    <div class="example-header">Effect handlers</div>
+    <pre><code><span class="kw">ef</span> Ask(prompt)
+<span class="kw">hd</span> {
+  name <span class="op">=</span> <span class="kw">pf</span> Ask(<span class="str">"what's your name?"</span>)
+  <span class="fn">p</span>(<span class="str">"Hello, "</span> <span class="op">+</span> name)
+} with {
+  Ask(q) k <span class="op">-></span> <span class="fn">k</span>(<span class="str">"Alice"</span>)          <span class="cmt"># resume with value</span>
+}</code></pre>
+    <div class="output">Hello, Alice</div>
+  </div>
+
+  <!-- ===== Concurrency ===== -->
+  <h2>Concurrency</h2>
+
+  <div class="example">
+    <div class="example-header">Green threads and channels</div>
+    <pre><code>h <span class="op">=</span> <span class="kw">gt</span> { <span class="fn">expensive_computation</span>() } <span class="cmt"># spawn thread, get future</span>
+result <span class="op">=</span> <span class="kw">aw</span> h                      <span class="cmt"># await result</span>
+
+c <span class="op">=</span> <span class="fn">ch</span>()                           <span class="cmt"># channel</span>
+<span class="kw">gt</span> { c.send(<span class="num">42</span>) }; <span class="fn">p</span>(c.recv())    <span class="cmt"># 42</span></code></pre>
+    <div class="output">42</div>
+  </div>
+
+  <!-- ===== List Comprehensions ===== -->
+  <h2>List Comprehensions</h2>
+
+  <div class="example">
+    <div class="example-header">Python-style comprehensions</div>
+    <pre><code>[x<span class="op">*</span>x <span class="kw">for</span> x <span class="kw">in</span> <span class="num">1</span>..<span class="op">=</span><span class="num">5</span>]              <span class="cmt"># [1, 4, 9, 16, 25]</span>
+[x <span class="kw">for</span> x <span class="kw">in</span> <span class="num">1</span>..<span class="op">=</span><span class="num">20</span> <span class="kw">if</span> x%<span class="num">3</span><span class="op">==</span><span class="num">0</span>]     <span class="cmt"># [3, 6, 9, 12, 15, 18]</span></code></pre>
+    <div class="output">[1, 4, 9, 16, 25]<br>[3, 6, 9, 12, 15, 18]</div>
+  </div>
+
+  <!-- ===== Decorators ===== -->
+  <h2>Decorators and Memoization</h2>
+
+  <div class="example">
+    <div class="example-header">Memoized Fibonacci</div>
+    <pre><code><span class="op">@</span><span class="fn">memo</span> <span class="kw">df</span> <span class="fn">fib</span>(n) { <span class="kw">if</span> n <span class="op"><=</span> <span class="num">1</span> { n } <span class="kw">el</span> { <span class="fn">fib</span>(n<span class="op">-</span><span class="num">1</span>) <span class="op">+</span> <span class="fn">fib</span>(n<span class="op">-</span><span class="num">2</span>) } }
+<span class="fn">fib</span>(<span class="num">50</span>)                            <span class="cmt"># instant -- cached</span></code></pre>
+  </div>
+
+  <!-- ===== Method Chaining ===== -->
+  <h2>Method Chaining</h2>
+
+  <div class="example">
+    <div class="example-header">Chained operations</div>
+    <pre><code>[<span class="num">1</span>,<span class="num">2</span>,<span class="num">3</span>,<span class="num">4</span>,<span class="num">5</span>,<span class="num">6</span>,<span class="num">7</span>,<span class="num">8</span>,<span class="num">9</span>,<span class="num">10</span>]
+  .fl(<span class="str">`</span>a%<span class="num">2</span><span class="op">==</span><span class="num">0</span><span class="str">`</span>)         <span class="cmt"># filter evens</span>
+  .m(<span class="str">`</span>a<span class="op">*</span>a<span class="str">`</span>)             <span class="cmt"># square</span>
+  .tw(<span class="str">`</span>a<span class="op"><</span><span class="num">50</span><span class="str">`</span>)            <span class="cmt"># take while &lt; 50</span></code></pre>
+    <div class="output">[4, 16, 36]</div>
+  </div>
+
+  <!-- ===== Self-Modification ===== -->
+  <h2>Self-Modification</h2>
+  <p>Programs can read and manipulate their own source, AST, and even their interpreter at runtime.</p>
+
+  <div class="example">
+    <div class="example-header">AST manipulation</div>
+    <pre><code><span class="fn">p</span>(src)                             <span class="cmt"># print own source code</span>
+node <span class="op">=</span> <span class="fn">ast_of</span>(<span class="num">1</span> <span class="op">+</span> <span class="num">2</span>)              <span class="cmt"># get AST without evaluating</span>
+node.rhs <span class="op">=</span> <span class="fn">ast_of</span>(<span class="num">10</span>)              <span class="cmt"># modify it</span>
+<span class="fn">eval_ast</span>(node)                     <span class="cmt"># evaluate modified AST -> 11</span></code></pre>
+    <div class="output">11</div>
+  </div>
+
+  <!-- ===== Reactive ===== -->
+  <h2>Reactive Triggers</h2>
+
+  <div class="example">
+    <div class="example-header">Variable change triggers</div>
+    <pre><code>x <span class="op">=</span> <span class="num">0</span>
+<span class="kw">on</span> x.ch { <span class="fn">p</span>(<span class="str">"x changed!"</span>) }
+x <span class="op">=</span> <span class="num">5</span>                             <span class="cmt"># prints: x changed!</span></code></pre>
+    <div class="output">x changed!</div>
+  </div>
+
+  <!-- ===== Stack-Based ===== -->
+  <h2>Stack-Based Mode</h2>
+
+  <div class="example">
+    <div class="example-header">Forth-style evaluation</div>
+    <pre><code><span class="kw">stk</span> { <span class="num">3</span> <span class="num">4</span> <span class="op">+</span> }                     <span class="cmt"># 7</span>
+<span class="kw">stk</span> { <span class="num">2</span> <span class="num">3</span> <span class="op">*</span> <span class="num">5</span> <span class="op">+</span> }                  <span class="cmt"># 11</span>
+<span class="kw">stk</span> { <span class="num">10</span> dup <span class="op">*</span> }                   <span class="cmt"># 100</span></code></pre>
+    <div class="output">7<br>11<br>100</div>
+  </div>
+
+  <!-- ===== Code Golf ===== -->
+  <h2>Code Golf Features</h2>
+  <p>One-letter aliases, backtick lambdas, auto-coercion, and method shorthands.</p>
+
+  <div class="example">
+    <div class="example-header">Golf one-liners</div>
+    <pre><code><span class="cmt"># One-letter aliases</span>
+<span class="fn">S</span>(<span class="str">"a,b,c"</span>, <span class="str">","</span>)                   <span class="cmt"># split -> ["a","b","c"]</span>
+<span class="fn">R</span>([<span class="num">1</span>,<span class="num">2</span>,<span class="num">3</span>])                        <span class="cmt"># reverse -> [3,2,1]</span>
+<span class="fn">F</span>([[<span class="num">1</span>,<span class="num">2</span>],[<span class="num">3</span>]])                     <span class="cmt"># flatten -> [1,2,3]</span>
+<span class="fn">D</span>(<span class="num">255</span>, <span class="num">16</span>)                        <span class="cmt"># digits -> [15,15]</span>
+
+<span class="cmt"># Auto-coercion</span>
+<span class="str">"123"</span> <span class="op">+</span> <span class="num">1</span>                        <span class="cmt"># 124</span>
+<span class="str">"a"</span> <span class="op">+</span> <span class="num">1</span>                          <span class="cmt"># "b" (character arithmetic)</span></code></pre>
+  </div>
+
+  <div class="example">
+    <div class="example-header">FizzBuzz -- verbose vs golf</div>
+    <pre><code><span class="cmt"># Verbose:</span>
+<span class="kw">for</span> i <span class="kw">in</span> <span class="num">1</span>..<span class="op">=</span><span class="num">15</span> {
+  <span class="fn">p</span>(<span class="kw">mt</span> [i%<span class="num">3</span>, i%<span class="num">5</span>] {
+    [<span class="num">0</span>,<span class="num">0</span>] <span class="op">-></span> <span class="str">"FizzBuzz"</span>
+    [<span class="num">0</span>,_] <span class="op">-></span> <span class="str">"Fizz"</span>
+    [_,<span class="num">0</span>] <span class="op">-></span> <span class="str">"Buzz"</span>
+    _     <span class="op">-></span> i
+  })
+}
+
+<span class="cmt"># Golf:</span>
+<span class="fn">m</span>(<span class="num">1</span>..<span class="op">=</span><span class="num">15</span>,<span class="str">`</span><span class="kw">mt</span>[a%<span class="num">3</span>,a%<span class="num">5</span>]{[<span class="num">0</span>,<span class="num">0</span>]-><span class="str">"FizzBuzz"</span>,[<span class="num">0</span>,_]-><span class="str">"Fizz"</span>,[_,<span class="num">0</span>]-><span class="str">"Buzz"</span>,_->a}<span class="str">`</span>).each(<span class="fn">P</span>)</code></pre>
+  </div>
+
+  <!-- ===== Python Aliases ===== -->
+  <h2>Python Module Aliases</h2>
+  <p>21 two-char aliases auto-import Python modules on first use.</p>
+
+  <div class="example">
+    <div class="example-header">Using Python from Snafu</div>
+    <pre><code><span class="fn">ma</span>.sqrt(<span class="num">16</span>)                        <span class="cmt"># math.sqrt -> 4.0</span>
+<span class="fn">js</span>.dumps([<span class="num">1</span>,<span class="num">2</span>,<span class="num">3</span>])                  <span class="cmt"># json.dumps -> "[1, 2, 3]"</span>
+<span class="fn">rn</span>.randint(<span class="num">1</span>, <span class="num">100</span>)                <span class="cmt"># random.randint</span>
+<span class="fn">os</span>.getcwd()                        <span class="cmt"># os.getcwd</span></code></pre>
+  </div>
+
+  <hr>
+  <p>
+    For the full keyword and function reference, see the <a href="reference.html">Reference Card</a>.
+    For the module/package system, see <a href="packages.html">Packages</a>.
+  </p>
+</main>
+
+</body>
+</html>

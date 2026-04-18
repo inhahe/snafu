@@ -1,0 +1,40 @@
+# ASCII Mandelbrot set renderer
+# Uses complex numbers: cx(re, im), abs(), .re, .im
+
+chars = " .:-=+*#%@"
+max_iter = 40
+
+# Image dimensions
+width  = 78
+height = 32
+
+# Complex plane window
+x_min = -2.2
+x_max =  0.8
+y_min = -1.2
+y_max =  1.2
+
+df mandel(c) {
+  z = cx(0.0, 0.0)
+  for i in range(max_iter) {
+    if abs(z) > 2.0 { r i }
+    z = z * z + c
+  }
+  max_iter
+}
+
+p("Mandelbrot set (${width}x${height})\n")
+
+for row in range(height) {
+  line = ""
+  cy = y_min + (y_max - y_min) * row / height
+  for col in range(width) {
+    cx_ = x_min + (x_max - x_min) * col / width
+    c = cx(cx_, cy)
+    n = mandel(c)
+    idx = n * (len(chars) - 1) / max_iter
+    if idx >= len(chars) { idx = len(chars) - 1 }
+    line = line + chars[int(idx)]
+  }
+  p(line)
+}

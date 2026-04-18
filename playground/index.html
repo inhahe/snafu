@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snafu Playground</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; background: #1a1a2e; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; }
+        .container { display: flex; height: 100vh; }
+        .editor-pane { flex: 1; display: flex; flex-direction: column; }
+        .output-pane { flex: 1; display: flex; flex-direction: column; border-left: 2px solid #333; }
+        textarea {
+            flex: 1; background: #252545; color: #e0e0e0; border: none;
+            padding: 16px; font-family: 'Consolas', 'Fira Code', monospace;
+            font-size: 14px; resize: none; outline: none;
+            tab-size: 4; line-height: 1.5;
+        }
+        textarea::placeholder { color: #666; }
+        #output {
+            flex: 1; background: #1a1a2e; color: #a0ffa0; padding: 16px;
+            font-family: 'Consolas', monospace; font-size: 14px;
+            overflow: auto; white-space: pre; line-height: 1.5;
+        }
+        .toolbar {
+            padding: 8px 16px; background: #16213e;
+            display: flex; gap: 8px; align-items: center;
+            flex-wrap: wrap;
+        }
+        button {
+            background: #0f3460; color: white; border: none;
+            padding: 8px 16px; cursor: pointer; border-radius: 4px;
+            font-size: 13px;
+        }
+        button:hover { background: #533483; }
+        button:active { background: #6a42a0; }
+        select {
+            background: #252545; color: #e0e0e0;
+            border: 1px solid #444; padding: 6px 8px;
+            border-radius: 4px; font-size: 13px;
+        }
+        h1 { margin: 0; font-size: 18px; color: #a0c0ff; }
+        .pane-label { font-size: 14px; color: #888; }
+        .loading { color: #888; }
+        .error { color: #ff6b6b; }
+        .status { margin-left: auto; font-size: 12px; color: #666; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="editor-pane">
+            <div class="toolbar">
+                <h1>Snafu Playground</h1>
+                <button onclick="runCode()" id="runBtn" title="Ctrl+Enter">Run</button>
+                <select id="examples" onchange="loadExample()">
+                    <option value="">-- examples --</option>
+                    <option value="hello">Hello World</option>
+                    <option value="fizzbuzz">FizzBuzz</option>
+                    <option value="fib">Fibonacci</option>
+                    <option value="pipeline">Pipeline</option>
+                    <option value="pattern">Pattern Match</option>
+                    <option value="apl">APL Ops</option>
+                    <option value="effects">Effects</option>
+                    <option value="fork">Universe Fork</option>
+                </select>
+                <button onclick="shareCode()" title="Copy shareable URL">Share</button>
+                <span class="status" id="status"></span>
+            </div>
+            <textarea id="code" spellcheck="false" placeholder="Write Snafu code here...">p("Hello, Snafu!")
+[1,2,3,4,5] |> m(`a*a`) |> sum</textarea>
+        </div>
+        <div class="output-pane">
+            <div class="toolbar">
+                <span class="pane-label">Output</span>
+                <button onclick="clearOutput()">Clear</button>
+            </div>
+            <div id="output"><span class="loading">Loading Pyodide...</span></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
+    <script>
+        let pyodide = null;
+        let snafuLoaded = false;
+
+        function setStatus(msg) {
+            document.getElementById("status").textContent = msg;
+        }
+
+        async function initPyodide() {
+            const output = document.getElementById("output");
+            try {
+                setStatus("loading pyodide...");
+                pyodide = await loadPyodide();
+                output.textContent = "Loading Snafu interpreter...\n";
+                setStatus("loading snafu.py...");
+
+                // Fetch snafu.py from the parent directory
+                const resp = await fetch("../snafu.py");
+                if (!resp.ok) throw new Error("Could not fetch snafu.py (HTTP " + resp.status + ")");
+                const snafuSrc = await resp.text();
+
+                // Load snafu.py into the Pyodide Python runtime
+                await pyodide.runPythonAsync(snafuSrc);
+
+                snafuLoaded = true;
+                setStatus("ready");
+                output.textContent = "Ready! Click Run or press Ctrl+Enter to execute.\n";
+            } catch (e) {
+                setStatus("error");
+                output.innerHTML = '<span class="error">Failed to load: ' + e.message +
+                    "</span>\n\nFallback: run code locally with:\n  python snafu.py -e 'your code'";
+            }
+        }
+
+        async function runCode() {
+            const code = document.getElementById("code").value;
+            const output = document.getElementById("output");
+            const btn = document.getElementById("runBtn");
+
+            if (!snafuLoaded) {
+                output.textContent = "Still loading... please wait.";
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = "Running...";
+            output.textContent = "";
+            setStatus("running...");
+
+            try {
+                // Escape the code string for embedding in Python
+                const escaped = JSON.stringify(code);
+                const result = await pyodide.runPythonAsync(`
+import sys
+from io import StringIO
+
+_captured = StringIO()
+_old_stdout = sys.stdout
+sys.stdout = _captured
+try:
+    _result = run(${escaped}, filename="<playground>")
+    _out = _captured.getvalue()
+    if _result is not None and _result is not UND:
+        _out += snafu_repr(_result) + "\\n"
+except SnafuError as e:
+    _out = _captured.getvalue() + "! " + type(e).__name__ + ": " + e.msg + "\\n"
+except Exception as e:
+    _out = _captured.getvalue() + "! Error: " + str(e) + "\\n"
+finally:
+    sys.stdout = _old_stdout
+_out
+`);
+                output.textContent = result;
+                setStatus("done");
+            } catch (e) {
+                output.innerHTML = '<span class="error">Error: ' + e.message + "</span>";
+                setStatus("error");
+            } finally {
+                btn.disabled = false;
+                btn.textContent = "Run";
+            }
+        }
+
+        // ---- Examples -------------------------------------------------------
+
+        const EXAMPLES = {
+            hello: 'p("Hello, Snafu!")\np("1 + 2 = " + str(1 + 2))',
+
+            fizzbuzz: `for i in 1..=15 {
+    mt [i % 3, i % 5] {
+        [0, 0] -> p("FizzBuzz")
+        [0, _] -> p("Fizz")
+        [_, 0] -> p("Buzz")
+        _      -> p(i)
+    }
+}`,
+
+            fib: `df fib(n) {
+    if n < 2 { n }
+    el { fib(n-1) + fib(n-2) }
+}
+for i in 0..10 {
+    p("fib(" + str(i) + ") = " + str(fib(i)))
+}`,
+
+            pipeline: `# Pipeline operators with lambdas
+[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    |> fl(\`a % 2 == 0\`)
+    |> m(\`a * a\`)
+    |> sum`,
+
+            pattern: `sm Shape = Circle(r) | Rect(w, h) | Tri(a, b, c)
+
+df area(s) {
+    mt s {
+        Circle(r)    -> 3.14159 * r * r
+        Rect(w, h)   -> w * h
+        Tri(a, b, c) -> {
+            s_val = (a + b + c) / 2
+            sqrt(s_val * (s_val-a) * (s_val-b) * (s_val-c))
+        }
+    }
+}
+
+shapes = [Circle(5), Rect(3, 4), Tri(3, 4, 5)]
+for s in shapes { p(str(s) + " area = " + str(area(s))) }`,
+
+            apl: `p("+/ [1..=10] = " + str(+/ lst(1..=10)))
+p("+\\\\ [1..=5] = " + str(+\\ [1,2,3,4,5]))
+p("[1,2,3] *. [4,5,6] = " + str([1,2,3] *. [4,5,6]))
+p("Multiplication table:")
+p(lst(1..=4) *.. lst(1..=4))`,
+
+            effects: `ef Greet(name)
+hd {
+    msg = pf Greet("World")
+    p(msg)
+} with {
+    Greet(name) k -> k("Hello, " + name + "!")
+}`,
+
+            fork: `x = 10
+future = fk { x = x * x; x }
+p("forked result: " + str(aw future))
+p("original x: " + str(x))`,
+        };
+
+        function loadExample() {
+            const sel = document.getElementById("examples");
+            if (sel.value && EXAMPLES[sel.value]) {
+                document.getElementById("code").value = EXAMPLES[sel.value];
+                sel.value = "";
+            }
+        }
+
+        function clearOutput() {
+            document.getElementById("output").textContent = "";
+        }
+
+        // ---- Share via URL hash ---------------------------------------------
+
+        function shareCode() {
+            const code = document.getElementById("code").value;
+            const encoded = btoa(unescape(encodeURIComponent(code)));
+            const url = window.location.origin + window.location.pathname + "#" + encoded;
+            navigator.clipboard.writeText(url).then(
+                () => setStatus("URL copied!"),
+                () => {
+                    // Fallback for non-HTTPS contexts
+                    window.prompt("Copy this URL:", url);
+                }
+            );
+        }
+
+        // Restore code from URL hash on load
+        if (window.location.hash.length > 1) {
+            try {
+                const decoded = decodeURIComponent(escape(atob(window.location.hash.slice(1))));
+                document.getElementById("code").value = decoded;
+            } catch (e) { /* ignore bad hashes */ }
+        }
+
+        // ---- Keyboard shortcut: Ctrl+Enter to run --------------------------
+
+        document.getElementById("code").addEventListener("keydown", function(e) {
+            if (e.ctrlKey && e.key === "Enter") {
+                e.preventDefault();
+                runCode();
+            }
+            // Tab inserts spaces instead of changing focus
+            if (e.key === "Tab") {
+                e.preventDefault();
+                const ta = e.target;
+                const start = ta.selectionStart;
+                const end = ta.selectionEnd;
+                ta.value = ta.value.substring(0, start) + "    " + ta.value.substring(end);
+                ta.selectionStart = ta.selectionEnd = start + 4;
+            }
+        });
+
+        // Boot
+        initPyodide();
+    </script>
+</body>
+</html>

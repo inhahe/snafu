@@ -1,0 +1,32 @@
+# Result type with pattern matching + pipeline
+
+sm Result = Ok(v) | Err(msg)
+
+df safe_div(a, b) {
+  if b == 0 { Err("division by zero") }
+  el { Ok(a / b) }
+}
+
+df unwrap_or(r, default) {
+  mt r {
+    Ok(v) -> v
+    Err(_) -> default
+  }
+}
+
+# Chain operations: if any fails, propagate Err
+df and_then(r, f) {
+  mt r {
+    Ok(v) -> f(v)
+    e@Err(_) -> e
+  }
+}
+
+p(safe_div(10, 2) |> unwrap_or(0))       # 5
+p(safe_div(10, 0) |> unwrap_or(-1))      # -1
+
+# Multi-step chain
+result = safe_div(100, 4)
+         |> and_then(f (x) -> safe_div(x, 0))
+         |> unwrap_or(-999)
+p(result)                                 # -999

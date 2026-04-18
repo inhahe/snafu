@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quick Reference - Snafu</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav>
+  <a class="logo" href="index.html">Snafu</a>
+  <div class="links">
+    <a href="index.html">Home</a>
+    <a href="tour.html">Language Tour</a>
+    <a href="reference.html" class="active">Reference</a>
+    <a href="packages.html">Packages</a>
+  </div>
+</nav>
+
+<main>
+  <h1>Quick Reference</h1>
+  <p>All keywords, operators, prelude functions, and method aliases at a glance.</p>
+
+  <!-- ===== Keywords by Category ===== -->
+  <h2>Keywords</h2>
+
+  <h3>Control Flow</h3>
+  <table>
+    <tr><th>Short</th><th>Long</th><th>Purpose</th></tr>
+    <tr><td><code>if</code></td><td><code>if</code></td><td>Conditional</td></tr>
+    <tr><td><code>el</code></td><td><code>else</code></td><td>Else clause</td></tr>
+    <tr><td><code>eli</code></td><td><code>elif</code></td><td>Else-if</td></tr>
+    <tr><td><code>mt</code></td><td><code>match</code></td><td>Pattern match</td></tr>
+    <tr><td><code>for</code></td><td><code>for</code></td><td>Iteration</td></tr>
+    <tr><td><code>in</code></td><td><code>in</code></td><td>Iteration source</td></tr>
+    <tr><td><code>wh</code></td><td><code>while</code></td><td>While loop</td></tr>
+    <tr><td><code>un</code></td><td><code>until</code></td><td>Until loop</td></tr>
+    <tr><td><code>lp</code></td><td><code>loop</code></td><td>Infinite loop / n-repeat</td></tr>
+    <tr><td><code>br</code></td><td><code>break</code></td><td>Break out of loop</td></tr>
+    <tr><td><code>cn</code></td><td><code>continue</code></td><td>Continue loop</td></tr>
+    <tr><td><code>r</code></td><td><code>return</code></td><td>Return from function</td></tr>
+    <tr><td><code>goto</code></td><td><code>goto</code></td><td>Jump to label</td></tr>
+    <tr><td><code>cf</code></td><td><code>comefrom</code></td><td>Reactive jump point</td></tr>
+    <tr><td><code>lbl</code></td><td><code>label</code></td><td>Define a label</td></tr>
+    <tr><td><code>by</code></td><td><code>by</code></td><td>Range step clause</td></tr>
+  </table>
+
+  <h3>Functions and Types</h3>
+  <table>
+    <tr><th>Short</th><th>Long</th><th>Purpose</th></tr>
+    <tr><td><code>df</code></td><td><code>def</code></td><td>Named function definition</td></tr>
+    <tr><td><code>f</code></td><td><code>fn</code></td><td>Anonymous function</td></tr>
+    <tr><td><code>ct</code></td><td><code>coroutine</code></td><td>Generator/coroutine</td></tr>
+    <tr><td><code>y</code></td><td><code>yield</code></td><td>Yield value</td></tr>
+    <tr><td><code>yf</code></td><td><code>yield_from</code></td><td>Yield from sub-generator</td></tr>
+    <tr><td><code>sm</code></td><td><code>sum</code></td><td>Sum type declaration</td></tr>
+    <tr><td><code>pr</code></td><td><code>protocol</code></td><td>Protocol declaration</td></tr>
+    <tr><td><code>im</code></td><td><code>impl</code></td><td>Implement protocol</td></tr>
+    <tr><td><code>dv</code></td><td><code>derive</code></td><td>Auto-derive protocols</td></tr>
+  </table>
+
+  <h3>Exceptions and Strict Mode</h3>
+  <table>
+    <tr><th>Short</th><th>Long</th><th>Purpose</th></tr>
+    <tr><td><code>ty</code></td><td><code>try</code></td><td>Try block</td></tr>
+    <tr><td><code>ex</code></td><td><code>except</code></td><td>Except clause</td></tr>
+    <tr><td><code>fi</code></td><td><code>finally</code></td><td>Finally clause</td></tr>
+    <tr><td><code>rs</code></td><td><code>raise</code></td><td>Raise exception</td></tr>
+    <tr><td><code>sd</code></td><td><code>strict</code></td><td>Strict mode (raises on <code>und</code>)</td></tr>
+    <tr><td><code>ld</code></td><td><code>loose</code></td><td>Loose mode (reverses strict)</td></tr>
+  </table>
+
+  <h3>Effects and Concurrency</h3>
+  <table>
+    <tr><th>Short</th><th>Long</th><th>Purpose</th></tr>
+    <tr><td><code>ef</code></td><td><code>effect</code></td><td>Declare an effect</td></tr>
+    <tr><td><code>pf</code></td><td><code>perform</code></td><td>Perform an effect</td></tr>
+    <tr><td><code>hd</code></td><td><code>handle</code></td><td>Handle effects</td></tr>
+    <tr><td><code>gt</code></td><td><code>green</code></td><td>Spawn green thread</td></tr>
+    <tr><td><code>aw</code></td><td><code>await</code></td><td>Await/join future</td></tr>
+    <tr><td><code>xs</code></td><td><code>execset</code></td><td>Execution set (parallel)</td></tr>
+    <tr><td><code>fk</code></td><td><code>fork</code></td><td>Universe fork</td></tr>
+  </table>
+
+  <h3>Modules and Scope</h3>
+  <table>
+    <tr><th>Short</th><th>Long</th><th>Purpose</th></tr>
+    <tr><td><code>us</code></td><td><code>use</code></td><td>Import module</td></tr>
+    <tr><td><code>xp</code></td><td><code>export</code></td><td>Declare exports</td></tr>
+    <tr><td><code>sc</code></td><td><code>scope</code></td><td>Current scope</td></tr>
+    <tr><td><code>ca</code></td><td><code>caller</code></td><td>Caller's scope</td></tr>
+    <tr><td><code>tp</code></td><td><code>top</code></td><td>Top-level scope</td></tr>
+    <tr><td><code>ev</code></td><td><code>eval</code></td><td>Eval string as code</td></tr>
+    <tr><td><code>wi</code></td><td><code>with</code></td><td>Context manager</td></tr>
+    <tr><td><code>on</code></td><td><code>on</code></td><td>Reactive trigger</td></tr>
+    <tr><td><code>of</code></td><td><code>off</code></td><td>Remove trigger</td></tr>
+  </table>
+
+  <h3>Literals and Sentinels</h3>
+  <table>
+    <tr><th>Name</th><th>Meaning</th></tr>
+    <tr><td><code>und</code></td><td>Undefined / null (propagates silently by default)</td></tr>
+    <tr><td><code>true</code> / <code>false</code></td><td>Boolean values</td></tr>
+    <tr><td><code>oo</code></td><td>Infinity</td></tr>
+    <tr><td><code>new</code></td><td>Object construction (prototype OOP)</td></tr>
+    <tr><td><code>_</code></td><td>Wildcard / placeholder</td></tr>
+  </table>
+
+  <!-- ===== Operator Precedence ===== -->
+  <h2>Operator Precedence</h2>
+  <p>Higher level = tighter binding. Evaluated left-to-right unless marked right-associative.</p>
+  <table>
+    <tr><th>Level</th><th>Operators</th><th>Assoc</th></tr>
+    <tr><td>100</td><td><code>()</code> call, <code>[]</code> index, <code>.</code> attr</td><td>left</td></tr>
+    <tr><td>95</td><td>unary <code>+ - ! ~</code>, <code>op/</code> reduce, <code>op\</code> scan</td><td>right</td></tr>
+    <tr><td>90</td><td><code>**</code> power, <code>//</code> nth root</td><td>right</td></tr>
+    <tr><td>85</td><td><code>*</code> <code>/</code> <code>%</code></td><td>left</td></tr>
+    <tr><td>80</td><td><code>+</code> <code>-</code></td><td>left</td></tr>
+    <tr><td>75</td><td><code>..</code> range, <code>..=</code> inclusive range</td><td>left</td></tr>
+    <tr><td>70</td><td><code>== &lt;&gt; === !== &lt; &gt; &lt;= &gt;= is in</code></td><td>non</td></tr>
+    <tr><td>65</td><td><code>!</code> boolean not (prefix)</td><td>right</td></tr>
+    <tr><td>62</td><td><code>&amp;</code> bitwise AND</td><td>left</td></tr>
+    <tr><td>60</td><td><code>&amp;&amp;</code> logical AND</td><td>left</td></tr>
+    <tr><td>55</td><td><code>^^</code> boolean XOR</td><td>left</td></tr>
+    <tr><td>50</td><td><code>||</code> logical OR</td><td>left</td></tr>
+    <tr><td>48</td><td><code>|</code> bitwise OR</td><td>left</td></tr>
+    <tr><td>45</td><td><code>&lt;-</code> <code>-&gt;</code> implication</td><td>right</td></tr>
+    <tr><td>40</td><td><code>? :</code> ternary</td><td>right</td></tr>
+    <tr><td>35</td><td><code>|&gt;</code> <code>|&gt;&gt;</code> pipeline</td><td>left</td></tr>
+    <tr><td>32</td><td><code>??</code> null-coalesce</td><td>right</td></tr>
+    <tr><td>25</td><td><code>=</code> and compound <code>+= -= *=</code> ...</td><td>right</td></tr>
+  </table>
+
+  <h3>APL-Style Modifiers</h3>
+  <table>
+    <tr><th>Modifier</th><th>Syntax</th><th>Meaning</th></tr>
+    <tr><td><code>.</code></td><td><code>op.</code></td><td>Element-wise (broadcasts across lists)</td></tr>
+    <tr><td><code>/</code></td><td><code>op/</code></td><td>Reduce (fold list with op)</td></tr>
+    <tr><td><code>\</code></td><td><code>op\</code></td><td>Scan (running reduce)</td></tr>
+    <tr><td><code>..</code></td><td><code>op..</code></td><td>Outer product (all pairs)</td></tr>
+  </table>
+
+  <!-- ===== Prelude Functions ===== -->
+  <h2>Prelude Functions</h2>
+
+  <h3>I/O</h3>
+  <table>
+    <tr><th>Function</th><th>Description</th></tr>
+    <tr><td><code>p(*args)</code></td><td>Print to stdout</td></tr>
+    <tr><td><code>pe(*args)</code></td><td>Print to stderr</td></tr>
+    <tr><td><code>inp(prompt)</code></td><td>Read line from stdin</td></tr>
+    <tr><td><code>read(path)</code></td><td>Read entire file as string</td></tr>
+    <tr><td><code>write(path, s)</code></td><td>Write string to file</td></tr>
+  </table>
+
+  <h3>Collections</h3>
+  <table>
+    <tr><th>Function</th><th>Description</th></tr>
+    <tr><td><code>len(x)</code></td><td>Length</td></tr>
+    <tr><td><code>lst(iter)</code></td><td>Materialize to list</td></tr>
+    <tr><td><code>st(iter)</code></td><td>Materialize to set</td></tr>
+    <tr><td><code>dct(iter)</code></td><td>Pairs to dict</td></tr>
+    <tr><td><code>range(a, b, step)</code></td><td>Range list</td></tr>
+    <tr><td><code>en(iter)</code></td><td>Enumerate</td></tr>
+    <tr><td><code>zp(*iters)</code></td><td>Zip</td></tr>
+    <tr><td><code>rev(iter)</code></td><td>Reverse</td></tr>
+    <tr><td><code>flat(iter)</code></td><td>Flatten one level</td></tr>
+    <tr><td><code>take(iter, n)</code></td><td>First n elements</td></tr>
+    <tr><td><code>drop(iter, n)</code></td><td>Skip first n</td></tr>
+    <tr><td><code>srt(iter, k, rv)</code></td><td>Sort (optional key, reverse)</td></tr>
+    <tr><td><code>sum(iter)</code></td><td>Sum elements</td></tr>
+    <tr><td><code>min/max(*args)</code></td><td>Minimum / maximum</td></tr>
+    <tr><td><code>join(sep, iter)</code></td><td>Join with separator</td></tr>
+    <tr><td><code>uniq(iter)</code></td><td>Deduplicate</td></tr>
+  </table>
+
+  <h3>Higher-Order</h3>
+  <table>
+    <tr><th>Function</th><th>Description</th></tr>
+    <tr><td><code>m(iter, f)</code></td><td>Map</td></tr>
+    <tr><td><code>fl(iter, pred)</code></td><td>Filter</td></tr>
+    <tr><td><code>rdc(iter, f, init)</code></td><td>Reduce / fold</td></tr>
+    <tr><td><code>prt(f, *bound)</code></td><td>Partial application</td></tr>
+    <tr><td><code>flip(f)</code></td><td>Swap first two args</td></tr>
+    <tr><td><code>fork(f, g, h)</code></td><td>Tacit fork</td></tr>
+    <tr><td><code>hook(f, g)</code></td><td>Tacit hook</td></tr>
+    <tr><td><code>tee(*fns)</code></td><td>Apply multiple fns, return list</td></tr>
+    <tr><td><code>tap(fn)</code></td><td>Side-effect pass-through</td></tr>
+    <tr><td><code>memo(fn)</code></td><td>Memoize a function</td></tr>
+  </table>
+
+  <h3>Math</h3>
+  <table>
+    <tr><th>Function</th><th>Description</th></tr>
+    <tr><td><code>abs sqrt exp</code></td><td>Absolute value, square root, e^x</td></tr>
+    <tr><td><code>log ln log2 log10</code></td><td>Logarithms</td></tr>
+    <tr><td><code>sin cos tan</code></td><td>Trigonometric</td></tr>
+    <tr><td><code>asin acos atan atan2</code></td><td>Inverse trigonometric</td></tr>
+    <tr><td><code>floor ceil round trunc</code></td><td>Rounding</td></tr>
+    <tr><td><code>sgn gcd lcm fact</code></td><td>Sign, GCD, LCM, factorial</td></tr>
+    <tr><td><code>pi e tau oo</code></td><td>Mathematical constants</td></tr>
+  </table>
+
+  <h3>Type and Conversion</h3>
+  <table>
+    <tr><th>Function</th><th>Description</th></tr>
+    <tr><td><code>int(x) flt(x) str(x)</code></td><td>Type conversion</td></tr>
+    <tr><td><code>type(x)</code></td><td>Type name string</td></tr>
+    <tr><td><code>isa(x, t)</code></td><td>Type check</td></tr>
+    <tr><td><code>chr(n) ord(s)</code></td><td>Codepoint conversion</td></tr>
+    <tr><td><code>cp(o)</code></td><td>Deep copy</td></tr>
+  </table>
+
+  <h3>Meta / Eval</h3>
+  <table>
+    <tr><th>Function</th><th>Description</th></tr>
+    <tr><td><code>ev(code)</code></td><td>Eval in caller scope</td></tr>
+    <tr><td><code>"code".ca()</code></td><td>Eval in global scope</td></tr>
+    <tr><td><code>ast_of(expr)</code></td><td>Get AST node</td></tr>
+    <tr><td><code>eval_ast(node)</code></td><td>Evaluate AST node</td></tr>
+    <tr><td><code>ast_src(node)</code></td><td>AST to source string</td></tr>
+    <tr><td><code>bp()</code></td><td>Breakpoint debugger</td></tr>
+    <tr><td><code>py.import(name)</code></td><td>Import Python module</td></tr>
+  </table>
+
+  <!-- ===== One-Letter Aliases ===== -->
+  <h2>One-Letter Golf Aliases</h2>
+  <table>
+    <tr><th>Alias</th><th>Full Name</th><th>Example</th></tr>
+    <tr><td><code>S</code></td><td>split</td><td><code>S("a,b,c", ",")</code> &rarr; <code>["a","b","c"]</code></td></tr>
+    <tr><td><code>J</code></td><td>join</td><td><code>J(",", [1,2,3])</code> &rarr; <code>"1,2,3"</code></td></tr>
+    <tr><td><code>R</code></td><td>reverse</td><td><code>R([1,2,3])</code> &rarr; <code>[3,2,1]</code></td></tr>
+    <tr><td><code>U</code></td><td>unique</td><td><code>U([1,2,2,3])</code> &rarr; <code>[1,2,3]</code></td></tr>
+    <tr><td><code>Z</code></td><td>zip</td><td><code>Z([1,2],[3,4])</code> &rarr; <code>[[1,3],[2,4]]</code></td></tr>
+    <tr><td><code>T</code></td><td>transpose</td><td><code>T([[1,2],[3,4]])</code> &rarr; <code>[[1,3],[2,4]]</code></td></tr>
+    <tr><td><code>F</code></td><td>flatten</td><td><code>F([[1,2],[3]])</code> &rarr; <code>[1,2,3]</code></td></tr>
+    <tr><td><code>D</code></td><td>digits</td><td><code>D(123)</code> &rarr; <code>[1,2,3]</code></td></tr>
+    <tr><td><code>P</code></td><td>print</td><td><code>P("hi")</code></td></tr>
+    <tr><td><code>G</code></td><td>group_by</td><td><code>G([1,2,3,4], `a%2`)</code></td></tr>
+    <tr><td><code>C</code></td><td>combinations</td><td><code>C([1,2,3], 2)</code> &rarr; <code>[[1,2],[1,3],[2,3]]</code></td></tr>
+    <tr><td><code>X</code></td><td>permutations</td><td><code>X([1,2,3])</code> &rarr; all 6 orderings</td></tr>
+    <tr><td><code>W</code></td><td>words</td><td><code>W("hello world")</code> &rarr; <code>["hello","world"]</code></td></tr>
+    <tr><td><code>L</code></td><td>lines</td><td><code>L("a\nb")</code> &rarr; <code>["a","b"]</code></td></tr>
+    <tr><td><code>N</code></td><td>numbers</td><td><code>N("3 cats 7")</code> &rarr; <code>[3, 7]</code></td></tr>
+    <tr><td><code>I</code></td><td>read stdin</td><td><code>I()</code> &rarr; entire stdin</td></tr>
+  </table>
+
+  <!-- ===== Method Aliases ===== -->
+  <h2>Short Method Aliases</h2>
+
+  <h3>String Methods</h3>
+  <table>
+    <tr><th>Long</th><th>Short</th><th>Example</th></tr>
+    <tr><td><code>.split(sep)</code></td><td><code>.sp(sep)</code></td><td><code>"a,b".sp(",")</code></td></tr>
+    <tr><td><code>.strip()</code></td><td><code>.tr()</code></td><td><code>" hi ".tr()</code></td></tr>
+    <tr><td><code>.replace(a,b)</code></td><td><code>.rpl(a,b)</code></td><td><code>"hi".rpl("i","o")</code></td></tr>
+    <tr><td><code>.starts(x)</code></td><td><code>.sw(x)</code></td><td><code>"hi".sw("h")</code></td></tr>
+    <tr><td><code>.ends(x)</code></td><td><code>.ew(x)</code></td><td><code>"hi".ew("i")</code></td></tr>
+    <tr><td><code>.repeat(n)</code></td><td><code>.rp(n)</code></td><td><code>"ab".rp(3)</code></td></tr>
+    <tr><td><code>.contains(x)</code></td><td><code>.has(x)</code></td><td><code>"hi".has("i")</code></td></tr>
+    <tr><td><code>.upper()</code></td><td><code>.upr()</code></td><td><code>"hi".upr()</code></td></tr>
+    <tr><td><code>.lower()</code></td><td><code>.lwr()</code></td><td><code>"HI".lwr()</code></td></tr>
+    <tr><td><code>.words()</code></td><td><code>.ws()</code></td><td><code>"a b".ws()</code></td></tr>
+    <tr><td><code>.lines()</code></td><td><code>.ln()</code></td><td><code>"a\nb".ln()</code></td></tr>
+    <tr><td><code>.chars()</code></td><td><code>.cs()</code></td><td><code>"abc".cs()</code></td></tr>
+  </table>
+
+  <h3>List Methods</h3>
+  <table>
+    <tr><th>Long</th><th>Short</th><th>Example</th></tr>
+    <tr><td><code>.map(f)</code></td><td><code>.m(f)</code></td><td><code>[1,2,3].m(`a*2`)</code></td></tr>
+    <tr><td><code>.filter(f)</code></td><td><code>.fl(f)</code></td><td><code>[1,2,3].fl(`a>1`)</code></td></tr>
+    <tr><td><code>.reduce(f,i)</code></td><td><code>.rd(f,i)</code></td><td><code>[1,2,3].rd(`a+b`,0)</code></td></tr>
+    <tr><td><code>.contains(x)</code></td><td><code>.has(x)</code></td><td><code>[1,2,3].has(2)</code></td></tr>
+    <tr><td><code>.intersperse(v)</code></td><td><code>.isp(v)</code></td><td><code>[1,2,3].isp(0)</code></td></tr>
+    <tr><td><code>.group_by(f)</code></td><td><code>.gb(f)</code></td><td><code>[1,2,3,4].gb(`a%2`)</code></td></tr>
+    <tr><td><code>.sort_by(f)</code></td><td><code>.sb(f)</code></td><td><code>["cc","a"].sb(`len(a)`)</code></td></tr>
+    <tr><td><code>.take_while(f)</code></td><td><code>.tw(f)</code></td><td><code>[1,2,3,4].tw(`a&lt;3`)</code></td></tr>
+    <tr><td><code>.drop_while(f)</code></td><td><code>.dw(f)</code></td><td><code>[1,2,3,4].dw(`a&lt;3`)</code></td></tr>
+    <tr><td><code>.flat_map(f)</code></td><td><code>.fm(f)</code></td><td><code>[1,2].fm(`[a,a*10]`)</code></td></tr>
+  </table>
+
+  <h3>Dict Methods</h3>
+  <table>
+    <tr><th>Long</th><th>Short</th><th>Example</th></tr>
+    <tr><td><code>.filter_vals(f)</code></td><td><code>.fv(f)</code></td><td><code>d.fv(`a>0`)</code></td></tr>
+    <tr><td><code>.map_vals(f)</code></td><td><code>.mv(f)</code></td><td><code>d.mv(`a*10`)</code></td></tr>
+    <tr><td><code>.map_keys(f)</code></td><td><code>.mk(f)</code></td><td><code>d.mk(`a.upr()`)</code></td></tr>
+    <tr><td><code>.without(k)</code></td><td><code>.wo(k)</code></td><td><code>d.wo("key")</code></td></tr>
+    <tr><td><code>.merge(d2)</code></td><td><code>.mg(d2)</code></td><td><code>d.mg(d2)</code></td></tr>
+    <tr><td><code>.update(d2)</code></td><td><code>.up(d2)</code></td><td><code>d.up(d2)</code> (mutating)</td></tr>
+  </table>
+
+  <!-- ===== Python Aliases ===== -->
+  <h2>Python Module Alias Table</h2>
+  <p>Two-char aliases that auto-import Python modules on first use. No <code>us</code> or <code>py.import</code> needed.</p>
+  <table>
+    <tr><th>Alias</th><th>Python Module</th><th>Example</th></tr>
+    <tr><td><code>ma</code></td><td>math</td><td><code>ma.sqrt(16)</code></td></tr>
+    <tr><td><code>js</code></td><td>json</td><td><code>js.dumps([1,2])</code></td></tr>
+    <tr><td><code>os</code></td><td>os</td><td><code>os.getcwd()</code></td></tr>
+    <tr><td><code>sy</code></td><td>sys</td><td><code>sy.argv</code></td></tr>
+    <tr><td><code>rn</code></td><td>random</td><td><code>rn.randint(1,10)</code></td></tr>
+    <tr><td><code>dt</code></td><td>datetime</td><td><code>dt.datetime.now()</code></td></tr>
+    <tr><td><code>rq</code></td><td>requests</td><td><code>rq.get("http://...")</code></td></tr>
+    <tr><td><code>n8</code></td><td>numpy</td><td><code>n8.array([1,2])</code></td></tr>
+    <tr><td><code>pd</code></td><td>pandas</td><td><code>pd.read_csv("f.csv")</code></td></tr>
+    <tr><td><code>pl</code></td><td>matplotlib.pyplot</td><td><code>pl.plot(xs, ys)</code></td></tr>
+    <tr><td><code>sq</code></td><td>sqlite3</td><td><code>sq.connect(":memory:")</code></td></tr>
+    <tr><td><code>cs</code></td><td>csv</td><td><code>cs.reader(file)</code></td></tr>
+    <tr><td><code>fs</code></td><td>pathlib</td><td><code>fs.Path(".")</code></td></tr>
+    <tr><td><code>it</code></td><td>itertools</td><td><code>it.chain(a, b)</code></td></tr>
+    <tr><td><code>ft</code></td><td>functools</td><td><code>ft.lru_cache</code></td></tr>
+    <tr><td><code>ic</code></td><td>collections</td><td><code>ic.Counter(list)</code></td></tr>
+    <tr><td><code>th</code></td><td>threading</td><td><code>th.Thread(...)</code></td></tr>
+    <tr><td><code>ap</code></td><td>asyncio</td><td><code>ap.run(...)</code></td></tr>
+    <tr><td><code>cp</code></td><td>subprocess</td><td><code>cp.run(cmd)</code></td></tr>
+    <tr><td><code>pk</code></td><td>pickle</td><td><code>pk.dumps(obj)</code></td></tr>
+    <tr><td><code>hs</code></td><td>hashlib</td><td><code>hs.md5(b"hi")</code></td></tr>
+  </table>
+</main>
+
+</body>
+</html>

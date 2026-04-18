@@ -1,0 +1,112 @@
+# Brainfuck interpreter in Snafu
+# Uses sum types for instructions, pattern matching for evaluation
+
+sm BF = Inc | Dec | Left | Right | Out | InC | Loop(body)
+
+# --- Parser: string -> list of BF instructions ---
+df bf_parse(src) {
+  result = _bf_inner(src, 0)
+  result[0]
+}
+
+df _bf_inner(src, pos) {
+  instrs = []
+  wh pos < len(src) {
+    ch = src[pos]
+    mt ch {
+      "+" -> { instrs = instrs + [Inc];   pos = pos + 1 }
+      "-" -> { instrs = instrs + [Dec];   pos = pos + 1 }
+      "<" -> { instrs = instrs + [Left];  pos = pos + 1 }
+      ">" -> { instrs = instrs + [Right]; pos = pos + 1 }
+      "." -> { instrs = instrs + [Out];   pos = pos + 1 }
+      "," -> { instrs = instrs + [InC];   pos = pos + 1 }
+      "[" -> {
+        inner = _bf_inner(src, pos + 1)
+        instrs = instrs + [Loop(inner[0])]
+        pos = inner[1]
+      }
+      "]" -> {
+        ret = [instrs, pos + 1]
+        r ret
+      }
+      _   -> { pos = pos + 1 }
+    }
+  }
+  [instrs, pos]
+}
+
+# --- Evaluator: uses mutable state object ---
+df bf_run(program, input_str) {
+  tape = []
+  for i in range(30000) { tape = tape + [0] }
+  st = new()
+  st.tape = tape
+  st.ptr = 0
+  st.in_pos = 0
+  st.out = ""
+
+  bf_exec(program, st, input_str)
+  st.out
+}
+
+df bf_exec(instrs, st, input_str) {
+  for instr in instrs {
+    mt instr {
+      Inc -> {
+        st.tape[st.ptr] = (st.tape[st.ptr] + 1) % 256
+      }
+      Dec -> {
+        st.tape[st.ptr] = (st.tape[st.ptr] - 1 + 256) % 256
+      }
+      Left -> {
+        st.ptr = st.ptr - 1
+      }
+      Right -> {
+        st.ptr = st.ptr + 1
+      }
+      Out -> {
+        st.out = st.out + chr(st.tape[st.ptr])
+      }
+      InC -> {
+        if st.in_pos < len(input_str) {
+          st.tape[st.ptr] = ord(input_str[st.in_pos])
+          st.in_pos = st.in_pos + 1
+        } el {
+          st.tape[st.ptr] = 0
+        }
+      }
+      Loop(body) -> {
+        wh st.tape[st.ptr] <> 0 {
+          bf_exec(body, st, input_str)
+        }
+      }
+    }
+  }
+}
+
+# === Demo ===
+p("=== Brainfuck Interpreter ===\n")
+
+# Hello World in Brainfuck
+hello_bf = "++++++++[>++++[>++>+++>+++>+<<<<-]>+>+>->>+[<]<-]>>.>---.+++++++..+++.>>.<-.<.+++.------.--------.>>+.>++."
+p("Program: Hello World")
+prog = bf_parse(hello_bf)
+result = bf_run(prog, "")
+p("Output:  ${result}")
+
+# Simple addition: 3 + 5 -> char code 8
+add_bf = "+++>+++++<[->+<]>."
+p("\nProgram: 3 + 5 (output char code)")
+prog2 = bf_parse(add_bf)
+result2 = bf_run(prog2, "")
+# The output is chr(8) which is non-printable, so show ordinal
+p("Output:  char code ${ord(result2[0])}")
+
+# Cat program (echo input)
+cat_bf = ",.,.,."
+p("\nProgram: Cat (echo 'Hi!')")
+prog3 = bf_parse(cat_bf)
+result3 = bf_run(prog3, "Hi!")
+p("Output:  ${result3}")
+
+p("\nDone!")
