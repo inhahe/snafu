@@ -479,6 +479,12 @@ second = g.sd("hello")
     ("restore_basic",   "x = 1; ps(); x = 99; restore(sa(-1)); x", 1),
     ("st_current",      'x = 42; s = st(); s["bindings"]["x"]', 42),
 
+    # ---- State buffer memory management ----
+    ("ps_clear",        "ps(); ps(); ps(); ps_clear(); ps_size()", 0),
+    ("ps_size",         "ps(); ps(); ps(); ps_size()", 3),
+    ("ps_max",          "ps_max(3); for i in 0..10 { ps() }; ps_size()", 3),
+    ("auto_rec_max",    "auto_record(true, 5); for i in 0..20 { x = i }; auto_record(false); ps_size() <= 5", True),
+
     # ================================================================
     #  GOLF SYNTAX FEATURES
     # ================================================================

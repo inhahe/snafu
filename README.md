@@ -6,13 +6,36 @@ A terse, dynamic, multi-paradigm language with ~165 features spanning 15+ paradi
 
 Most languages pick 2-3 paradigms. Snafu picks all of them — and adds features no other language has:
 
-### Modify your own interpreter — in Snafu, not C
+### Infinite meta-circular interpreter stack
+
+The interpreter is a Snafu function. You can modify it — and modify the interpreter that interprets the interpreter, ad infinitum:
 
 ```
-lv(2)                              # enable meta-interpretation
+lv(2)                              # 2 levels: program → meta-interpreter → host
 isrc[1] = "f(node, scope) -> { p(\">> \" + ast_src(node)); eval_ast(node, scope) }"
 x = 5                              # prints ">> x = 5" then executes
-# The interpreter IS a Snafu function. Change it to change how ALL code runs.
+
+lv(3)                              # 3 levels: program → meta-interp 1 → meta-interp 2 → host
+isrc[2] = "f(node, scope) -> { p(\"L2: \" + ast_src(node)); eval_ast(node, scope) }"
+# Level 2 interprets level 1, which interprets your program.
+# Modify isrc[n] at ANY level to change how that level works.
+# Each level is a Snafu function you can replace, inspect, or transform.
+```
+
+### N-dimensional instruction pointer
+
+Code isn't limited to linear execution. Jump in 2D (or N-D) across your program:
+
+```
+# 1D jumps (like goto but by index)
+x = 0; jr(2); x = 99; x = 1; x   # skips x=99, returns 1
+
+# 2D jumps (row, column in the source grid)
+ja(3, 0)                           # jump to row 3, column 0
+jr(1, 2)                           # move 1 row down, 2 statements right
+
+# Lines are rows, ;-separated statements are columns.
+# Combined with goto/lbl for labeled jumps.
 ```
 
 ### Fork the universe
@@ -58,7 +81,9 @@ hd {
 # → [1, 4, 9]  — nondeterministic choice!
 ```
 
-### State time-travel
+### Program history and rollback
+
+Snapshot your program's entire state, rewind to any point, or auto-record every step:
 
 ```
 x = 1; ps()                       # push state snapshot
@@ -66,6 +91,21 @@ x = 2; ps()
 x = 99
 restore(sa(-2))                    # rewind to first snapshot
 x                                  # → 1
+
+# Auto-record every assignment (with bounded memory):
+auto_record(true, 1000)            # keep last 1000 snapshots
+# ... program runs ...
+restore(sa(-50))                   # rewind 50 steps
+
+# Named checkpoints:
+ps("before_risky_op")
+risky_operation()
+restore(sp("before_risky_op"))     # undo if something went wrong
+
+# Memory management:
+ps_max(500)                        # cap buffer at 500 snapshots
+ps_size()                          # check current buffer size
+ps_clear()                         # flush all snapshots
 ```
 
 ### Reactive variable triggers

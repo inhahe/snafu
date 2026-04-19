@@ -3051,6 +3051,7 @@ class Interpreter:
         # ---- Auto-recording (per-statement state recording) ----
         self.auto_record = False
         self._auto_step = 0
+        self._state_max_size = 0  # 0 = unlimited
         # ---- Persistent variables (pv) ----
         self.source_file = None
         # ---- STM (dosync) ----
@@ -3496,6 +3497,11 @@ class Interpreter:
         g.define_local("ps", lambda name=None: interp_self_for_state._push_state(interp_self_for_state.global_scope, name))
         # restore fallback (actual is a special form in eval_Call)
         g.define_local("restore", lambda snapshot: None)
+
+        # ---- State buffer management: ps_clear, ps_size, ps_max ----
+        g.define_local("ps_clear", lambda: (interp_self_for_state.state_buffer.clear(), UND)[-1])
+        g.define_local("ps_size", lambda: len(interp_self_for_state.state_buffer))
+        g.define_local("ps_max", lambda n: setattr(interp_self_for_state, '_state_max_size', int(n)) or UND)
 
         # ---- Feature: OS Process Spawning (exec, shell, exec_lines) ----
         def snafu_exec(cmd, input_str=None):
@@ -3951,10 +3957,12 @@ class Interpreter:
         # FEATURE 5: Automatic per-statement state recording
         # ==============================================================
         interp_for_autorec = self
-        def snafu_auto_record(enable):
+        def snafu_auto_record(enable, max_size=0):
             interp_for_autorec.auto_record = truthy(enable)
             if truthy(enable):
                 interp_for_autorec._auto_step = 0
+            if max_size:
+                interp_for_autorec._state_max_size = int(max_size)
             return UND
         g.define_local("auto_record", snafu_auto_record)
 
@@ -4898,18 +4906,25 @@ class Interpreter:
                 print(f"! {e}")
         return UND
 
+    @staticmethod
+    def _cheap_copy(v):
+        """Copy mutable values, share immutable ones."""
+        if isinstance(v, list):
+            return list(v)  # shallow list copy
+        if isinstance(v, dict):
+            return dict(v)  # shallow dict copy
+        # Everything else (int, float, str, bool, Fraction, tuple, functions,
+        # SnafuObj, etc.) is immutable or intentionally shared.
+        return v
+
     def _snapshot_scope(self, scope):
-        """Deep-copy all bindings in the scope chain into a flat dict."""
-        import copy as _copy
+        """Snapshot all bindings — cheap copy (shallow-copy mutables, share immutables)."""
         result = {}
         s = scope
         while s is not None:
             for k, v in s.bindings.items():
                 if k not in result and not k.startswith('__'):
-                    try:
-                        result[k] = _copy.deepcopy(v)
-                    except Exception:
-                        result[k] = v  # some objects can't be deepcopied
+                    result[k] = self._cheap_copy(v)
             s = s.parent
         return result
 
@@ -4922,6 +4937,10 @@ class Interpreter:
         }
         with self._lock:
             self.state_buffer.append(snapshot)
+            # Enforce max buffer size
+            if self._state_max_size > 0:
+                while len(self.state_buffer) > self._state_max_size:
+                    self.state_buffer.pop(0)
             return len(self.state_buffer) - 1
 
     # ---- Feature 1: Multi-level meta-circular interpreter ----
