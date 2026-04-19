@@ -579,7 +579,7 @@ stk { 3 4 + }                     # 7 (Forth-style)
 | `SPEC.md` | The full language specification (v1.7). Source of truth for all semantics. |
 | `GOLF_SYNTAX.md` | Reference card for code golf features: backtick lambdas, one-letter aliases, method shorthands, combinatorics. |
 | `CONCEPTS.md` | Design notes for 20 major features (pattern matching, effects, protocols, etc.). Background reading. |
-| `GRAMMAR.epeg` | Formal grammar in extended PEG notation. |
+| `GRAMMAR.epeg` | Formal grammar for [GPDA](https://github.com/inhahe/GPDA), a zero-lookahead graph-walking parser. |
 | `ROADMAP.md` | Implementation status and planned work. |
 | `examples/` | Example programs: `fizzbuzz.snf`, `showcase.snf`, `safe_div.snf`, `tree.snf`. |
 | `tests/` | Test suite. |

@@ -1,6 +1,12 @@
 # ============================================================================
 # Snafu language grammar — scannerless EPEG
-# Corresponds to SPEC.md v0.1. Target parser: gpda_scannerless.py.
+#
+# This grammar is written for GPDA, a graph-walking parser with zero
+# lookahead: https://github.com/inhahe/GPDA
+#
+# Target parser: gpda_scannerless.py (scannerless mode).
+# Corresponds to SPEC.md. Covers the core language; newer features
+# (comprehensions, where-clauses, quantifiers, etc.) not yet added.
 #
 # Conventions:
 #   UPPERCASE rules  = atomic (token-like), no auto-_
