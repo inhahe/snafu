@@ -1,0 +1,29 @@
+# Build artifacts
+*.obj
+*.exe
+*.o
+*.so
+*.dylib
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Editor/IDE
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Snafu runtime
+*.pkl
+~/.snafu/
+
+# Personal notes
+todo.txt

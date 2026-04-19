@@ -305,5 +305,5 @@ genuinely modifies how every language feature works — the ultimate meta-circul
 - [x] Package manager (`snafu_pkg.py` — init/create/publish/install/list/search/remove)
 - [x] Web playground (`playground/index.html` — Pyodide-based, runs in browser, 8 examples, share-via-URL)
 
-### 2f. Remaining future work
-- [ ] C++ Phase 3: Python bridge via embedded CPython
+### 2f. Completed
+- [x] C++ Phase 3: Python bridge via embedded CPython (`py.import("math").sqrt(16)` works from C++)
