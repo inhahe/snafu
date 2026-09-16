@@ -590,3 +590,9 @@ stk { 3 4 + }                     # 7 (Forth-style)
 - [GOLF_SYNTAX.md](GOLF_SYNTAX.md) -- code golf reference
 - [CONCEPTS.md](CONCEPTS.md) -- feature design notes
 - [examples/](examples/) -- example programs
+
+
+## License
+
+MIT - see [LICENSE](LICENSE). Free to use, modify and redistribute; provided
+as-is, with no warranty.
