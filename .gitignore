@@ -27,3 +27,15 @@ Thumbs.db
 
 # Personal notes
 todo.txt
+
+# Local-only. We publish straight from this directory now instead of copying
+# a filtered subset into D:\github, so these are excluded here instead.
+.orchestrator_history
+__pycache__/
+copy_to_github.bat
+esolangs_page.wiki
+orchestrator2.log
+*.exe
+*.log
+.claude/
+01 - New note - Megafuck.txt
